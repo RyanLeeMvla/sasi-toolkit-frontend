@@ -1,0 +1,116 @@
+/* reset & base */
+body {
+  background: #f4f4f4;
+  margin: 0;
+  padding: 0;
+  font-family: "Segoe UI", sans-serif;
+  color: #333;
+}
+
+/* App container */
+.App {
+  max-width: 800px;
+  margin: 40px auto;
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Title */
+.App h1 {
+  font-size: 2rem;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Tabs bar */
+.tabs {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #ccc;
+}
+
+.tabs button {
+  background: none;
+  border: none;
+  margin: 0 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 1rem;
+  border-radius: 4px 4px 0 0;
+}
+
+.tabs button.active {
+  background: #e6e6fa;
+  border: 1px solid #ccc;
+  border-bottom: 1px solid white;
+  font-weight: bold;
+}
+
+/* Panel content */
+.panel {
+  padding: 16px;
+}
+
+/* Form labels & inputs */
+.panel label {
+  display: block;
+  font-weight: 600;
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+
+.panel input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+/* Generate button */
+.panel button.generate {
+  margin-top: 16px;
+  background-color: #cc3366;
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.2s;
+}
+
+.panel button.generate:hover {
+  background-color: #ad2a5a;
+}
+
+/* Response box */
+.panel .response {
+  margin-top: 24px;
+  padding: 16px;
+  background: #f9f9fb;
+  border: 1px dashed #bbb;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-family: Consolas, monospace;
+}
+
+.listening-indicator {
+  color: #6a1b9a;
+  font-weight: bold;
+  font-size: 1rem;
+  margin-top: 8px;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
