@@ -40,18 +40,43 @@ app.post('/trigger-button', (req, res) => {
   res.json({ status: 'Button press emitted' });
 });
 
-// 🔁 Route: Extract (temp placeholder)
-app.post('/extract', (req, res) => {
+app.post('/extract', async (req, res) => {
   const { transcript } = req.body;
   console.log("🎤 Received transcript:", transcript);
 
-  // Replace this logic with real extraction later
-  res.json({
-    symptom: "test symptom from voice",
-    dismissal: "doctor said it's nothing",
-    action: "I want a neurological referral"
-  });
+  try {
+    const chat = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `
+You are an AI assistant helping extract structured information from a spoken patient story. 
+Return a valid JSON object with these three keys ONLY: "symptom", "dismissal", and "action".
+
+Do NOT include any explanation — just return a compact JSON like:
+{"symptom":"...", "dismissal":"...", "action":"..."}
+          `.trim()
+        },
+        {
+          role: "user",
+          content: `Transcript: "${transcript}"`
+        }
+      ],
+      temperature: 0.4
+    });
+
+    const jsonText = chat.choices[0].message.content.trim();
+
+    // Validate JSON
+    const parsed = JSON.parse(jsonText);
+    res.json(parsed);
+  } catch (err) {
+    console.error("❌ AI extraction error:", err);
+    res.status(500).json({ error: "Failed to extract structured info from transcript" });
+  }
 });
+
 
 // 🧠 Route: Generate story using OpenAI
 app.post('/generate', async (req, res) => {
