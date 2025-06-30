@@ -1,10 +1,10 @@
-// src/App.js
 import React, { useState, useEffect } from 'react';
 import './ToolkitStyle.css';
 import ProgressBar from './ProgressBar';
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:3001');
+// ✅ Point to Render backend (adjust this if you set up an environment variable later)
+const socket = io('https://sasi-toolkit.onrender.com');
 
 function App() {
   const [tab, setTab] = useState('story');
@@ -16,7 +16,7 @@ function App() {
   const [listening, setListening] = useState(false);
   const [response, setResponse] = useState('Your AI-generated response will appear here.');
 
-  // 🔁 Dual-mode support: listen for physical button press
+  // ✅ Listen for physical button press
   useEffect(() => {
     socket.on('buttonPress', () => {
       console.log("🟢 Physical button pressed!");
@@ -25,11 +25,11 @@ function App() {
     return () => socket.off('buttonPress');
   }, []);
 
-  // 🎤 Single field voice input
+  // 🎤 Single-field mic input
   const startListening = (fieldSetter) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return alert("Speech recognition not supported.");
-
+    
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = false;
@@ -40,12 +40,13 @@ function App() {
       const transcript = event.results[0][0].transcript;
       fieldSetter(transcript);
     };
+
     recognition.onend = () => setListening(false);
     recognition.onerror = () => setListening(false);
     recognition.start();
   };
 
-  // 🎤 Full voice → AI parse → fill inputs → run prompt
+  // 🎤 Full voice input → backend extraction → autofill + run story
   const handleFullVoiceInput = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return alert("Speech recognition not supported.");
@@ -66,15 +67,19 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ transcript: fullTranscript })
         });
+
         const data = await res.json();
 
+        // ✅ Fill input fields from backend response
         setSymptom(data.symptom || '');
         setDismissal(data.dismissal || '');
         setAction(data.action || '');
-        handleSubmit(); // Auto-run after filling
+
+        // Auto-run story generation
+        handleSubmit(data.symptom, data.dismissal);
       } catch (err) {
         console.error("Error parsing transcript:", err);
-        setResponse("Error parsing voice transcript");
+        setResponse("Error parsing voice transcript.");
       }
     };
 
@@ -83,8 +88,11 @@ function App() {
     recognition.start();
   };
 
-  // 🧠 Run AI story generation
-  const handleSubmit = async () => {
+  // ✍️ Generate AI story
+  const handleSubmit = async (customSymptom, customDismissal) => {
+    const usedSymptom = customSymptom !== undefined ? customSymptom : symptom;
+    const usedDismissal = customDismissal !== undefined ? customDismissal : dismissal;
+
     setIsLoading(true);
     setResponse('Generating story…');
     setProgress(0);
@@ -101,8 +109,9 @@ function App() {
       const res = await fetch('https://sasi-toolkit.onrender.com/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symptom, dismissal })
+        body: JSON.stringify({ symptom: usedSymptom, dismissal: usedDismissal })
       });
+
       const data = await res.json();
       clearInterval(interval);
       setProgress(100);
@@ -147,7 +156,7 @@ function App() {
             <button onClick={() => startListening(setAction)}>🎤</button>
           </div>
 
-          <button className="generate" onClick={handleSubmit}>🌸 Generate Story</button>
+          <button className="generate" onClick={() => handleSubmit()}>🌸 Generate Story</button>
 
           {listening && (
             <div className="listening-indicator">🎙️ Listening...</div>

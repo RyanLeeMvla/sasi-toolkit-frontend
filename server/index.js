@@ -1,25 +1,65 @@
 const express = require('express');
 const cors = require('cors');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 require('dotenv').config();
 const OpenAI = require('openai');
 
 const app = express();
+const httpServer = createServer(app); // 👈 unified HTTP + WebSocket
 const PORT = process.env.PORT || 4000;
 
+// ✅ Enable CORS and JSON parsing
 app.use(cors());
 app.use(express.json());
 
-// ✅ Initialize the OpenAI SDK v4
+// ✅ Socket.IO setup
+const io = new Server(httpServer, {
+  cors: {
+    origin: '*', // Replace with your Vercel URL for security
+    methods: ['GET', 'POST']
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('🔌 Socket connected:', socket.id);
+  socket.on('disconnect', () => {
+    console.log('❌ Socket disconnected:', socket.id);
+  });
+});
+
+// ✅ OpenAI SDK v4 initialization
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// 🔁 Route: Button press trigger from ESP32 or any remote source
+app.post('/trigger-button', (req, res) => {
+  io.emit('buttonPress');
+  console.log('🟢 Button press emitted to clients');
+  res.json({ status: 'Button press emitted' });
+});
+
+// 🔁 Route: Extract (temp placeholder)
+app.post('/extract', (req, res) => {
+  const { transcript } = req.body;
+  console.log("🎤 Received transcript:", transcript);
+
+  // Replace this logic with real extraction later
+  res.json({
+    symptom: "test symptom from voice",
+    dismissal: "doctor said it's nothing",
+    action: "I want a neurological referral"
+  });
+});
+
+// 🧠 Route: Generate story using OpenAI
 app.post('/generate', async (req, res) => {
   const { symptom, dismissal } = req.body;
 
   try {
     const chatCompletion = await openai.chat.completions.create({
-      model: "gpt-4", // or "gpt-3.5-turbo"
+      model: "gpt-4",
       messages: [
         {
           role: "system",
@@ -52,13 +92,7 @@ Do not apologize or minimize the patient’s concerns. Use first-person language
   }
 });
 
-app.post('/extract', (req, res) => {
-  const { transcript } = req.body;
-  console.log("Received transcript:", transcript);
-  res.json({ message: "Transcript received", transcript });
-});
-
-
-app.listen(PORT, () => {
-  console.log(`Backend listening on port ${PORT}`);
+// ✅ Start HTTP + WebSocket server
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Backend + Socket.IO server listening on port ${PORT}`);
 });
