@@ -71,13 +71,14 @@ app.post('/generate', async (req, res) => {
 As a healthcare advocate, generate a professional, respectful, and assertive response that the patient can say in return. Write in the first person, and pretend that you are the patient. Pretend that this issue means the world to you.
 The response should:
 - Reference real, legally binding policies such as:
-  • The Affordable Care Act (e.g., 42 U.S.C. § 18001)
-  • HIPAA (e.g., 45 CFR § 164.524)
-  • Civil Rights Act protections (e.g., 42 U.S. Code § 2000d)
-  • The Parity Law (e.g., 29 U.S.C. § 1185a)
-  • The Joint Commission standards
+  • Affordable Care Act (42 U.S.C. § 18001): Expands access to insurance, bans denial for preexisting conditions, and mandates coverage for services like preventive care and mental health.
+• HIPAA (45 CFR § 164.524): Grants patients the right to access and review their medical records, promoting transparency and continuity of care.
+• Civil Rights Act (42 U.S.C. § 2000d): Prohibits discrimination in federally funded healthcare—supports equitable treatment and language access.
+• Parity Law (29 U.S.C. § 1185a): Requires equal coverage for mental health and addiction treatment as for physical conditions.
+• Joint Commission Standards: Accreditation guidelines for healthcare facilities, covering patient safety, infection control, and quality of care.
 - Be at least 4 sentences long.
 - Use direct, educated language that builds trust but firmly requests care.
+- Adress the patient's specific symptom and the doctor's dismissal, include word for word.
 - Include at least one legal citation using its actual law code or regulation number in quotes.
 Do not apologize or minimize the patient’s concerns. Use first-person language (e.g., "I appreciate", "I understand", "I request").`
         }
