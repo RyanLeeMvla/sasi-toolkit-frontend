@@ -1,3 +1,4 @@
+import cors from 'cors';
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -51,6 +52,13 @@ Do not apologize or minimize the patient’s concerns. Use first-person language
     res.status(500).json({ error: err.message });
   }
 });
+
+app.post('/extract', (req, res) => {
+  const { transcript } = req.body;
+  console.log("Received transcript:", transcript);
+  res.json({ message: "Transcript received", transcript });
+});
+
 
 app.listen(PORT, () => {
   console.log(`Backend listening on port ${PORT}`);
