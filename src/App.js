@@ -117,7 +117,7 @@ function App() {
       setProgress(100);
       await new Promise(res => setTimeout(res, 300));
       setIsLoading(false);
-      setResponse(`💬 AI Response:\n\n${data.message}`);
+      setResponse(`📝 Summary:\n${data.summary}\n\n💬 AI Sentence:\n${data.message}`);
     } catch (err) {
       clearInterval(interval);
       setProgress(0);

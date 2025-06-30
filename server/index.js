@@ -45,38 +45,58 @@ app.post('/extract', async (req, res) => {
   console.log("🎤 Received transcript:", transcript);
 
   try {
-    const chat = await openai.chat.completions.create({
+    // ✏️ Step 1: Summarize the transcript
+    const summaryChat = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
         {
           role: "system",
           content: `
-You are an AI assistant helping extract structured information from a spoken patient story. 
-Return a valid JSON object with these three keys ONLY: "symptom", "dismissal", and "action".
-
-Do NOT include any explanation — just return a compact JSON like:
-{"symptom":"...", "dismissal":"...", "action":"..."}
-          `.trim()
+Summarize this patient statement in 1-2 sentences. 
+Focus on the medical concern and any dismissal or frustration they express.
+Keep it short and clear.
+        `.trim()
         },
         {
           role: "user",
-          content: `Transcript: "${transcript}"`
+          content: transcript
+        }
+      ],
+      temperature: 0.5
+    });
+
+    const summary = summaryChat.choices[0].message.content.trim();
+    console.log("📝 Summary:", summary);
+
+    // 🧠 Step 2: Extract structured info from summary
+    const extractChat = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `
+You are an AI assistant helping extract structured information from a patient summary. 
+Return a JSON object with exactly these keys: "symptom", "dismissal", "action".
+No commentary. Output example:
+{"symptom":"...", "dismissal":"...", "action":"..."}
+        `.trim()
+        },
+        {
+          role: "user",
+          content: `Summary: "${summary}"`
         }
       ],
       temperature: 0.4
     });
 
-    const jsonText = chat.choices[0].message.content.trim();
+    const parsed = JSON.parse(extractChat.choices[0].message.content.trim());
+    res.json({ ...parsed, summary });
 
-    // Validate JSON
-    const parsed = JSON.parse(jsonText);
-    res.json(parsed);
   } catch (err) {
-    console.error("❌ AI extraction error:", err);
-    res.status(500).json({ error: "Failed to extract structured info from transcript" });
+    console.error("❌ Error in /extract:", err);
+    res.status(500).json({ error: "Failed to summarize or extract data" });
   }
 });
-
 
 // 🧠 Route: Generate story using OpenAI
 app.post('/generate', async (req, res) => {
