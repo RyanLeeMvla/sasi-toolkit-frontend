@@ -3,8 +3,13 @@ const cors = require('cors');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 
-// const { createClient } = require('@supabase/supabase-js');
-// const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+// server/index.js or server/extract.js
+const { createClient } = require('@supabase/supabase-js');
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY // use service_role for server-side
+);
 
 require('dotenv').config();
 const OpenAI = require('openai');
@@ -99,18 +104,40 @@ No commentary. Output example:
       temperature: 0.4
     });
 
-    console.log("📦 Parsed object:");
-    console.log(parsed);
-
     const parsed = JSON.parse(extractChat.choices[0].message.content.trim());
+    console.log("📦 Parsed object:", parsed);
+
     res.json({ ...parsed, summary });
 
+    // 🧠 Save interaction to Supabase
+    const { error } = await supabase.from('interactions').insert([{
+      transcript,
+      summary,
+      symptom: parsed.symptom,
+      dismissal: parsed.dismissal,
+      action: parsed.action
+    }]);
+
+    if (error) console.error("❌ Supabase insert failed:", error.message);
+    else console.log("✅ Saved to Supabase");
+
+
   } catch (err) {
-    console.error("❌ Error in /extract:", err);
-    res.status(500).json({ error: "Failed to summarize or extract data" });
+    console.error("❌ Error in /extract:", err.message);
+    console.error(err.stack); // full traceback for debugging
+    res.status(500).json({ error: err.message || "Unknown error" });
   }
+
 });
 
+ app.post('/dev-insert', async (req, res) => {
+      const { transcript, summary, symptom, dismissal, action } = req.body;
+      const { error } = await supabase.from('interactions').insert([{ transcript, summary, symptom, dismissal, action }]);
+      if (error) return res.status(500).json({ error: error.message });
+      res.json({ status: 'Insert successful' });
+    });
+
+    
 // app.post('/debug-audio', upload.single('audio'), (req, res) => {
 //   if (!req.file) {
 //     console.log("❌ No file received at /debug-audio");
