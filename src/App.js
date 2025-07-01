@@ -36,7 +36,7 @@ function App() {
     });
   }, []);
 
-  if (!user) return <Login />;
+  if (!user) return <Login setUser={setUser} />;
 
   // 🎤 Single-field mic input
   const startListening = (fieldSetter) => {

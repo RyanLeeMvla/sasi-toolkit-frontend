@@ -114,3 +114,38 @@ body {
   50% { opacity: 1; }
   100% { opacity: 0.6; }
 }
+
+/* Login box styles */
+.login-box {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 10px;
+  width: 300px;
+  margin: 5rem auto;
+  box-shadow: 0 0 20px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+.login-box input {
+  width: 100%;
+  padding: 10px;
+  margin: 0.5rem 0;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+.login-box button {
+  width: 100%;
+  padding: 10px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.login-message {
+  color: green;
+  margin-top: 1rem;
+  font-weight: 500;
+}
