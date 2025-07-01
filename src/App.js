@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import './ToolkitStyle.css';
 import ProgressBar from './ProgressBar';
 import io from 'socket.io-client';
+import { supabase } from './supabaseClient';
+import Login from './Login'; // ✅ Import your login component
+
 
 // ✅ Point to Render backend (adjust this if you set up an environment variable later)
 const socket = io('https://sasi-toolkit.onrender.com');
@@ -14,6 +17,7 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [listening, setListening] = useState(false);
+  const [user, setUser] = useState(null);
   const [response, setResponse] = useState('Your AI-generated response will appear here.');
 
   // ✅ Listen for physical button press
@@ -24,6 +28,14 @@ function App() {
     });
     return () => socket.off('buttonPress');
   }, []);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+  }, []);
+
+  if (!user) return <Login />; // ⛔ Show login first
 
   // 🎤 Single-field mic input
   const startListening = (fieldSetter) => {
@@ -63,10 +75,10 @@ function App() {
 
       console.log("📤 Sending transcript to /extract:", fullTranscript);
       try {
-        const res = await fetch('https://sasi-toolkit.onrender.com/extract', {
+        const res = await fetch('https://your-render-backend-url.com/extract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transcript: fullTranscript })
+          body: JSON.stringify({ transcript: fullTranscript, user_id: user.id })
         });
 
         const data = await res.json();
@@ -113,10 +125,10 @@ function App() {
     }, 300);
 
     try {
-      const res = await fetch('https://sasi-toolkit.onrender.com/generate', {
+      const res = await fetch('https://your-render-backend-url.com/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symptom: usedSymptom, dismissal: usedDismissal })
+        body: JSON.stringify({ symptom: usedSymptom, dismissal: usedDismissal, user_id: user.id })
       });
 
       const data = await res.json();
@@ -136,6 +148,11 @@ function App() {
   return (
     <div className="App">
       <h1>🧠 Storytelling Toolkit for Patients</h1>
+
+      <div>
+        <h1>Welcome, {user.email}</h1>
+        {/* your app UI here */}
+      </div>
 
       <div className="tabs">
         <button className={tab === 'story' ? 'active' : ''} onClick={() => setTab('story')}>Build Your Story</button>

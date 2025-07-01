@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const { transcript, user_id } = req.body;
+
+require('dotenv').config();
 
 // server/index.js or server/extract.js
 const { createClient } = require('@supabase/supabase-js');
@@ -11,7 +14,6 @@ const supabase = createClient(
   process.env.SUPABASE_KEY // use service_role for server-side
 );
 
-require('dotenv').config();
 const OpenAI = require('openai');
 
 const app = express();
@@ -60,17 +62,12 @@ app.post('/extract', async (req, res) => {
   console.log("🎤 Received transcript:", transcript);
 
   try {
-    // ✏️ Step 1: Summarize the transcript
     const summaryChat = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
         {
           role: "system",
-          content: `
-Summarize this patient statement in 1-2 sentences. 
-Focus on the medical concern and any dismissal or frustration they express.
-Keep it short and clear.
-        `.trim()
+          content: `Summarize this patient statement in 1-2 sentences...`
         },
         {
           role: "user",
@@ -83,18 +80,12 @@ Keep it short and clear.
     const summary = summaryChat.choices[0].message.content.trim();
     console.log("📝 Summary:", summary);
 
-    // 🧠 Step 2: Extract structured info from summary
     const extractChat = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
         {
           role: "system",
-          content: `
-You are an AI assistant helping extract structured information from a patient summary. 
-Return a JSON object with exactly these keys: "symptom", "dismissal", "action".
-No commentary. Output example:
-{"symptom":"...", "dismissal":"...", "action":"..."}
-        `.trim()
+          content: `Return a JSON object with exactly these keys: "symptom", "dismissal", "action"...`
         },
         {
           role: "user",
@@ -104,53 +95,43 @@ No commentary. Output example:
       temperature: 0.4
     });
 
-    const parsed = JSON.parse(extractChat.choices[0].message.content.trim());
-    console.log("📦 Parsed object:", parsed);
+  const parsed = JSON.parse(extractChat.choices[0].message.content.trim());
+  console.log("📦 Parsed object:", parsed);
 
-    res.json({ ...parsed, summary });
+  // Validate values before insert
+  const payload = {
+    transcript: transcript || '',
+    summary: summary || '',
+    symptom: parsed.symptom || '',
+    dismissal: parsed.dismissal || '',
+    action: parsed.action || ''
+  };
 
-    // 🧠 Save interaction to Supabase
-    const { error } = await supabase.from('interactions').insert([{
-      transcript,
-      summary,
-      symptom: parsed.symptom,
-      dismissal: parsed.dismissal,
-      action: parsed.action
-    }]);
+  console.log("📤 Final insert payload:", payload);
+  console.log("📥 Attempting to insert into Supabase...");
 
-    if (error) console.error("❌ Supabase insert failed:", error.message);
-    else console.log("✅ Saved to Supabase");
+  const { error, data } = await supabase
+    .from('Sasi-toolkit')
+    .insert([payload])
+    .select();
 
+  console.log("🧾 Supabase insert result:", { error, data });
 
-  } catch (err) {
-    console.error("❌ Error in /extract:", err.message);
-    console.error(err.stack); // full traceback for debugging
-    res.status(500).json({ error: err.message || "Unknown error" });
+  if (error) {
+    console.error("❌ Supabase insert failed:", error.message);
+  } else {
+    console.log("✅ Inserted row ID:", data?.[0]?.id);
   }
 
+  res.json({ ...parsed, summary });
+
+  } catch (err) {
+    console.error("❌ Outer error in /extract:", err.message);
+    console.error(err.stack);
+    res.status(500).json({ error: err.message });
+  }
 });
 
- app.post('/dev-insert', async (req, res) => {
-      const { transcript, summary, symptom, dismissal, action } = req.body;
-      const { error } = await supabase.from('interactions').insert([{ transcript, summary, symptom, dismissal, action }]);
-      if (error) return res.status(500).json({ error: error.message });
-      res.json({ status: 'Insert successful' });
-    });
-
-    
-// app.post('/debug-audio', upload.single('audio'), (req, res) => {
-//   if (!req.file) {
-//     console.log("❌ No file received at /debug-audio");
-//     return res.status(400).send("No file uploaded");
-//   }
-
-//   console.log("✅ Received file at /debug-audio:");
-//   console.log(` - Field name: ${req.file.fieldname}`);
-//   console.log(` - Original name: ${req.file.originalname}`);
-//   console.log(` - Size: ${req.file.size} bytes`);
-
-//   res.json({ status: "File received", size: req.file.size });
-// });
 
 app.post('/transcribe', upload.single('audio'), async (req, res) => {
     try {
@@ -202,12 +183,6 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
     }
   });
 
-
-  app.get('/transcribe', (req, res) => {
-    res.status(200).send('🧠 /transcribe is live and waiting for POSTs!');
-  });
-
-
 // 🧠 Route: Generate story using OpenAI
 app.post('/generate', async (req, res) => {
   const { symptom, dismissal } = req.body;
@@ -241,6 +216,27 @@ Do not apologize or minimize the patient’s concerns. Use first-person language
     });
 
     const reply = chatCompletion.choices[0].message.content;
+
+    // ✅ Save to Supabase as fallback if it wasn't already logged
+    const { error, data } = await supabase
+      .from('Sasi-toolkit')
+      .insert([{
+        transcript: null, // or "manual entry"
+        summary: null,
+        symptom: symptom || '',
+        dismissal: dismissal || '',
+        action: null,
+        user_id,
+        response: reply
+      }])
+      .select();
+
+    if (error) {
+      console.error("❌ Failed to log manual entry to Supabase:", error.message);
+    } else {
+      console.log("📦 Logged manual session to Supabase → ID:", data?.[0]?.id);
+    }
+
     res.json({ message: reply });
   } catch (err) {
     console.error(err);
