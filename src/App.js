@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './ToolkitStyle.css';
 import ProgressBar from './ProgressBar';
 import io from 'socket.io-client';
-import { supabase } from './supabaseClient';
+import supabase from './supabaseClient';
 import Login from './Login'; // ✅ Import your login component
 
 
