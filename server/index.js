@@ -137,6 +137,12 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
     }
   });
 
+
+  app.get('/transcribe', (req, res) => {
+    res.status(200).send('🧠 /transcribe is live and waiting for POSTs!');
+  });
+
+
 // 🧠 Route: Generate story using OpenAI
 app.post('/generate', async (req, res) => {
   const { symptom, dismissal } = req.body;
