@@ -3,8 +3,8 @@ const cors = require('cors');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 
-const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+// const { createClient } = require('@supabase/supabase-js');
+// const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 require('dotenv').config();
 const OpenAI = require('openai');
