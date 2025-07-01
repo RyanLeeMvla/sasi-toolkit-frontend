@@ -220,6 +220,16 @@ function App() {
           <li><strong>The Joint Commission</strong>: Establishes standards for patient safety and advocacy nationwide.</li>
         </ul>
       )}
+
+      <button
+        onClick={async () => {
+          await supabase.auth.signOut();
+          setUser(null);
+        }}
+        style={{ position: 'absolute', top: '20px', right: '20px' }}
+      >
+        🔒 Sign Out
+      </button>
     </div>
   );
 }
