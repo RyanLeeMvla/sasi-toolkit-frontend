@@ -99,6 +99,9 @@ No commentary. Output example:
       temperature: 0.4
     });
 
+    console.log("📦 Parsed object:");
+    console.log(parsed);
+
     const parsed = JSON.parse(extractChat.choices[0].message.content.trim());
     res.json({ ...parsed, summary });
 
@@ -112,24 +115,37 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
     try {
       const audioPath = req.file.path;
 
+      console.log("📥 Received audio file:");
+      console.log(`🧾 Filename: ${req.file.originalname}`);
+      console.log(`📁 Saved as: ${req.file.path}`);
+
       const transcription = await openai.audio.transcriptions.create({
+        
         file: fs.createReadStream(audioPath),
         model: 'whisper-1',
         response_format: 'json'
       });
+      console.log("🎙️ Whisper transcription complete:");
+      console.log(transcription.text);
 
       console.log("📝 Transcript:", transcription.text);
+      
+
 
       // Pipe result to existing /extract logic
       const extractRes = await fetch(`http://localhost:${PORT}/extract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript: transcription.text })
+        
       });
+      console.log("🔁 Sent transcript to /extract for parsing.");
 
       const parsed = await extractRes.json();
       fs.unlinkSync(audioPath); // clean up temp file
 
+      console.log("✅ Final parsed JSON to send:");
+      console.log(parsed);
       res.json(parsed);
     } catch (err) {
       console.error("❌ Error in /transcribe:", err);

@@ -61,6 +61,7 @@ function App() {
       const fullTranscript = event.results[0][0].transcript;
       console.log("🎤 Full transcript:", fullTranscript);
 
+      console.log("📤 Sending transcript to /extract:", fullTranscript);
       try {
         const res = await fetch('https://sasi-toolkit.onrender.com/extract', {
           method: 'POST',
@@ -77,10 +78,16 @@ function App() {
 
         // Auto-run story generation
         handleSubmit(data.symptom, data.dismissal);
+        console.log("✅ Received structured data from backend:", data);
+        console.log("📌 Autofilling fields:");
+        console.log("Symptom:", data.symptom);
+        console.log("Dismissal:", data.dismissal);
+        console.log("Action:", data.action);
       } catch (err) {
         console.error("Error parsing transcript:", err);
         setResponse("Error parsing voice transcript.");
       }
+
     };
 
     recognition.onend = () => setListening(false);
