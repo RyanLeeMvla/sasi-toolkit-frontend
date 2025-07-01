@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
-const { transcript, user_id } = req.body;
 
 require('dotenv').config();
 
@@ -58,7 +57,7 @@ app.post('/trigger-button', (req, res) => {
 });
 
 app.post('/extract', async (req, res) => {
-  const { transcript } = req.body;
+  const { transcript, user_id } = req.body;
   console.log("🎤 Received transcript:", transcript);
 
   try {
