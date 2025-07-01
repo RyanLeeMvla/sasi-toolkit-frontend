@@ -111,6 +111,21 @@ No commentary. Output example:
   }
 });
 
+app.post('/debug-audio', upload.single('audio'), (req, res) => {
+  if (!req.file) {
+    console.log("❌ No file received at /debug-audio");
+    return res.status(400).send("No file uploaded");
+  }
+
+  console.log("✅ Received file at /debug-audio:");
+  console.log(` - Field name: ${req.file.fieldname}`);
+  console.log(` - Original name: ${req.file.originalname}`);
+  console.log(` - Size: ${req.file.size} bytes`);
+
+  res.json({ status: "File received", size: req.file.size });
+});
+
+
 app.post('/transcribe', upload.single('audio'), async (req, res) => {
     try {
       const audioPath = req.file.path;
