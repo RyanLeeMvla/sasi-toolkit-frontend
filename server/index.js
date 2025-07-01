@@ -111,20 +111,19 @@ No commentary. Output example:
   }
 });
 
-app.post('/debug-audio', upload.single('audio'), (req, res) => {
-  if (!req.file) {
-    console.log("❌ No file received at /debug-audio");
-    return res.status(400).send("No file uploaded");
-  }
+// app.post('/debug-audio', upload.single('audio'), (req, res) => {
+//   if (!req.file) {
+//     console.log("❌ No file received at /debug-audio");
+//     return res.status(400).send("No file uploaded");
+//   }
 
-  console.log("✅ Received file at /debug-audio:");
-  console.log(` - Field name: ${req.file.fieldname}`);
-  console.log(` - Original name: ${req.file.originalname}`);
-  console.log(` - Size: ${req.file.size} bytes`);
+//   console.log("✅ Received file at /debug-audio:");
+//   console.log(` - Field name: ${req.file.fieldname}`);
+//   console.log(` - Original name: ${req.file.originalname}`);
+//   console.log(` - Size: ${req.file.size} bytes`);
 
-  res.json({ status: "File received", size: req.file.size });
-});
-
+//   res.json({ status: "File received", size: req.file.size });
+// });
 
 app.post('/transcribe', upload.single('audio'), async (req, res) => {
     try {
@@ -133,6 +132,14 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
       console.log("📥 Received audio file:");
       console.log(`🧾 Filename: ${req.file.originalname}`);
       console.log(`📁 Saved as: ${req.file.path}`);
+
+      try {
+        const { execSync } = require('child_process');
+        const result = execSync(`ffprobe -v error -show_format -show_streams ${audioPath}`);
+        console.log("🎵 ffprobe output:\n" + result.toString());
+      } catch (ffErr) {
+        console.error("❌ ffprobe failed:", ffErr.message);
+      }
 
       const transcription = await openai.audio.transcriptions.create({
         
