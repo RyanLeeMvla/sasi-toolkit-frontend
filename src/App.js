@@ -3,14 +3,13 @@ import './ToolkitStyle.css';
 import ProgressBar from './ProgressBar';
 import io from 'socket.io-client';
 import supabase from './supabaseClient';
-import Login from './Login'; // ✅ Import your login component
-
+import Login from './Login';
 
 // ✅ Point to Render backend (adjust this if you set up an environment variable later)
 const socket = io('https://sasi-toolkit.onrender.com');
 
 function App() {
-  const [tab, setTab] = useState('story');
+  const [tab, setTab] = useState('story');f
   const [symptom, setSymptom] = useState('');
   const [dismissal, setDismissal] = useState('');
   const [action, setAction] = useState('');
@@ -20,28 +19,30 @@ function App() {
   const [user, setUser] = useState(null);
   const [response, setResponse] = useState('Your AI-generated response will appear here.');
 
-  // ✅ Listen for physical button press
+  // Listen for physical button press
   useEffect(() => {
     socket.on('buttonPress', () => {
       console.log("🟢 Physical button pressed!");
       handleFullVoiceInput();
     });
     return () => socket.off('buttonPress');
+    // eslint-disable-next-line
   }, []);
 
+  // Get current user from Supabase
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user);
     });
   }, []);
 
-  if (!user) return <Login />; // ⛔ Show login first
+  if (!user) return <Login />;
 
   // 🎤 Single-field mic input
   const startListening = (fieldSetter) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return alert("Speech recognition not supported.");
-    
+
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = false;
@@ -59,7 +60,7 @@ function App() {
   };
 
   // 🎤 Full voice input → backend extraction → autofill + run story
-  const handleFullVoiceInput = () => {
+  const handleFullVoiceInput = async () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return alert("Speech recognition not supported.");
 
@@ -73,33 +74,33 @@ function App() {
       const fullTranscript = event.results[0][0].transcript;
       console.log("🎤 Full transcript:", fullTranscript);
 
-      console.log("📤 Sending transcript to /extract:", fullTranscript);
       try {
-        const res = await fetch('https://your-render-backend-url.com/extract', {
+        // Get JWT access token from Supabase
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data?.session?.access_token;
+
+        const res = await fetch('https://sasi-toolkit.onrender.com/extract', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transcript: fullTranscript, user_id: user.id })
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
+          },
+          body: JSON.stringify({ transcript: fullTranscript })
         });
 
-        const data = await res.json();
+        const dataRes = await res.json();
 
-        // ✅ Fill input fields from backend response
-        setSymptom(data.symptom || '');
-        setDismissal(data.dismissal || '');
-        setAction(data.action || '');
+        setSymptom(dataRes.symptom || '');
+        setDismissal(dataRes.dismissal || '');
+        setAction(dataRes.action || '');
 
         // Auto-run story generation
-        handleSubmit(data.symptom, data.dismissal);
-        console.log("✅ Received structured data from backend:", data);
-        console.log("📌 Autofilling fields:");
-        console.log("Symptom:", data.symptom);
-        console.log("Dismissal:", data.dismissal);
-        console.log("Action:", data.action);
+        handleSubmit(dataRes.symptom, dataRes.dismissal);
+        console.log("✅ Received structured data from backend:", dataRes);
       } catch (err) {
         console.error("Error parsing transcript:", err);
         setResponse("Error parsing voice transcript.");
       }
-
     };
 
     recognition.onend = () => setListening(false);
@@ -125,18 +126,25 @@ function App() {
     }, 300);
 
     try {
-      const res = await fetch('https://your-render-backend-url.com/generate', {
+      // Get JWT access token from Supabase
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data?.session?.access_token;
+
+      const res = await fetch('https://sasi-toolkit.onrender.com/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symptom: usedSymptom, dismissal: usedDismissal, user_id: user.id })
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
+        },
+        body: JSON.stringify({ symptom: usedSymptom, dismissal: usedDismissal })
       });
 
-      const data = await res.json();
+      const dataRes = await res.json();
       clearInterval(interval);
       setProgress(100);
       await new Promise(res => setTimeout(res, 300));
       setIsLoading(false);
-      setResponse(`📝 Summary:\n${data.summary}\n\n💬 AI Sentence:\n${data.message}`);
+      setResponse(`💬 AI Sentence:\n${dataRes.message}`);
     } catch (err) {
       clearInterval(interval);
       setProgress(0);
@@ -151,7 +159,6 @@ function App() {
 
       <div>
         <h1>Welcome, {user.email}</h1>
-        {/* your app UI here */}
       </div>
 
       <div className="tabs">
