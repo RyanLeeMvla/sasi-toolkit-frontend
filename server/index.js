@@ -2,12 +2,22 @@ const express = require('express');
 const cors = require('cors');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+
 require('dotenv').config();
 const OpenAI = require('openai');
 
 const app = express();
 const httpServer = createServer(app); // 👈 unified HTTP + WebSocket
 const PORT = process.env.PORT || 4000;
+
+const multer = require('multer');
+const fs = require('fs');
+const upload = multer({ dest: 'uploads/' });
+
+
 
 // ✅ Enable CORS and JSON parsing
 app.use(cors());
@@ -97,6 +107,35 @@ No commentary. Output example:
     res.status(500).json({ error: "Failed to summarize or extract data" });
   }
 });
+
+app.post('/transcribe', upload.single('audio'), async (req, res) => {
+    try {
+      const audioPath = req.file.path;
+
+      const transcription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(audioPath),
+        model: 'whisper-1',
+        response_format: 'json'
+      });
+
+      console.log("📝 Transcript:", transcription.text);
+
+      // Pipe result to existing /extract logic
+      const extractRes = await fetch(`http://localhost:${PORT}/extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript: transcription.text })
+      });
+
+      const parsed = await extractRes.json();
+      fs.unlinkSync(audioPath); // clean up temp file
+
+      res.json(parsed);
+    } catch (err) {
+      console.error("❌ Error in /transcribe:", err);
+      res.status(500).json({ error: "Transcription failed" });
+    }
+  });
 
 // 🧠 Route: Generate story using OpenAI
 app.post('/generate', async (req, res) => {
