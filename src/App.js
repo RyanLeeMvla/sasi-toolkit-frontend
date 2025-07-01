@@ -222,11 +222,11 @@ function App() {
       )}
 
       <button
+        className="signout-button"
         onClick={async () => {
           await supabase.auth.signOut();
           setUser(null);
         }}
-        style={{ position: 'absolute', top: '20px', right: '20px' }}
       >
         🔒 Sign Out
       </button>
