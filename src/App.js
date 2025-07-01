@@ -9,7 +9,7 @@ import Login from './Login';
 const socket = io('https://sasi-toolkit.onrender.com');
 
 function App() {
-  const [tab, setTab] = useState('story');f
+  const [tab, setTab] = useState('story');
   const [symptom, setSymptom] = useState('');
   const [dismissal, setDismissal] = useState('');
   const [action, setAction] = useState('');
