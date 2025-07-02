@@ -67,6 +67,21 @@ app.post('/trigger-button', (req, res) => {
   res.json({ status: 'Button press emitted' });
 });
 
+app.post('/timeline', authenticateJWT, async (req, res) => {
+  const { title, description, event_time } = req.body;
+  const user_id = req.user_id;
+
+  const { data, error } = await supabase.from('timeline_events').insert([{
+    user_id,
+    title: title || 'Untitled Event',
+    description: description || '',
+    event_time: event_time || new Date().toISOString()
+  }]);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true, id: data[0].id });
+});
+
 // Secure /extract and /generate with JWT middleware
 app.use('/extract', authenticateJWT);
 app.use('/generate', authenticateJWT);

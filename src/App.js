@@ -18,6 +18,10 @@ function App() {
   const [listening, setListening] = useState(false);
   const [user, setUser] = useState(null);
   const [response, setResponse] = useState('Your AI-generated response will appear here.');
+  const [timeline, setTimeline] = useState([]);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+  const [newTime, setNewTime] = useState(new Date().toISOString().slice(0, 16)); // 'YYYY-MM-DDTHH:mm'
 
   // Listen for physical button press
   useEffect(() => {
@@ -60,6 +64,44 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('timeline_events')
+        .select('*')
+        .order('event_time', { ascending: false })
+        .then(({ data, error }) => {
+          if (!error) setTimeline(data);
+        });
+    }
+  }, [user]);
+
+  const addTimelineEvent = async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    const res = await fetch('https://sasi-toolkit.onrender.com/timeline', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        title: newTitle,
+        description: newDesc,
+        event_time: newTime
+      })
+    });
+
+    const result = await res.json();
+    if (result.success) {
+      setTimeline([{ id: result.id, title: newTitle, description: newDesc, event_time: newTime }, ...timeline]);
+      setNewTitle('');
+      setNewDesc('');
+      setNewTime(new Date().toISOString().slice(0, 16));
+    }
+  };
+
   if (!user) return <Login setUser={setUser} />;
 
   // 🎤 Single-field mic input
@@ -97,6 +139,30 @@ function App() {
     recognition.onresult = async (event) => {
       const fullTranscript = event.results[0][0].transcript;
       console.log("🎤 Full transcript:", fullTranscript);
+
+      // 🗣️ Voice-triggered Add to Timeline
+      if (/add (this )?to timeline/i.test(fullTranscript)) {
+        try {
+          const { data } = await supabase.auth.getSession();
+          const accessToken = data?.session?.access_token;
+
+          await fetch('https://sasi-toolkit.onrender.com/timeline', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+              title: 'Voice Log',
+              description: fullTranscript
+            })
+          });
+          setResponse('🗂️ Added to timeline by voice command.');
+        } catch (err) {
+          setResponse('Error adding to timeline: ' + err.message);
+        }
+        return;
+      }
 
       try {
         // Get JWT access token from Supabase
@@ -189,6 +255,7 @@ function App() {
         <button className={tab === 'story' ? 'active' : ''} onClick={() => setTab('story')}>Build Your Story</button>
         <button className={tab === 'frames' ? 'active' : ''} onClick={() => setTab('frames')}>Sentence Frames</button>
         <button className={tab === 'rights' ? 'active' : ''} onClick={() => setTab('rights')}>Know Your Rights</button>
+        <button className={tab === 'timeline' ? 'active' : ''} onClick={() => setTab('timeline')}>📅 Timeline</button>
       </div>
 
       {tab === 'story' && (
@@ -243,6 +310,28 @@ function App() {
           <li><strong>Parity Law</strong>: Ensures mental and physical conditions receive equal care and coverage.</li>
           <li><strong>The Joint Commission</strong>: Establishes standards for patient safety and advocacy nationwide.</li>
         </ul>
+      )}
+
+      {tab === 'timeline' && (
+        <div className="panel">
+          <h2>Add a Timeline Event</h2>
+          <input placeholder="Title" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
+          <textarea placeholder="Description" value={newDesc} onChange={e => setNewDesc(e.target.value)} />
+          <input type="datetime-local" value={newTime} onChange={e => setNewTime(e.target.value)} />
+          <button onClick={addTimelineEvent}>➕ Add to Timeline</button>
+
+          <hr />
+
+          <h2>Your Timeline</h2>
+          <ul>
+            {timeline.map(event => (
+              <li key={event.id}>
+                <strong>{event.title}</strong> – {new Date(event.event_time).toLocaleString()}
+                <p>{event.description}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <button
