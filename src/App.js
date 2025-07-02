@@ -146,33 +146,23 @@ const saveEdit = async (id) => {
 
   // Timeline delete (state-based refresh)
 const deleteTimelineEvent = async (id) => {
-  if (!window.confirm('Are you sure you want to delete this event?')) return;
-
   try {
-    // 1. get the token
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
-    if (!token) throw new Error('Not authenticated');
-
-    // 2. call the DELETE endpoint
-    const res = await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
+    const res = await fetch(`${API}/timeline/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` }
     });
-
-    const json = await res.json();
-    if (!res.ok || !json.success) {
-      console.error('DELETE failed:', json);
-      throw new Error(json.error || 'Unknown error');
-    }
-
-    // 3. refresh your list
+    const text = await res.text();
+    console.log('DELETE status', res.status, 'response:', text);
+    if (!res.ok) throw new Error(text);
     await fetchTimeline();
   } catch (err) {
-    console.error('Error deleting event:', err);
+    console.error(err);
     alert(`Delete failed: ${err.message}`);
   }
 };
+
 
 
   if (!user) return <Login setUser={setUser} />;

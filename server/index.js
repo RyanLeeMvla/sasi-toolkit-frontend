@@ -1,32 +1,3 @@
-// Update timeline event endpoint
-app.put('/timeline/:id', authenticateJWT, async (req, res) => {
-  const { id } = req.params;
-  const user_id = req.user_id;
-  const { title, description, event_time } = req.body;
-
-  const { error } = await supabase
-    .from('timeline_events')
-    .update({ title, description, event_time })
-    .eq('id', id)
-    .eq('user_id', user_id);
-
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
-});
-// Delete timeline event endpoint
-app.delete('/timeline/:id', authenticateJWT, async (req, res) => {
-  const { id } = req.params;
-  const user_id = req.user_id;
-
-  const { error } = await supabase
-    .from('timeline_events')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', user_id); // ⛓️ RLS-safe
-
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
-});
 const express = require('express');
 const cors = require('cors');
 const { createServer } = require('http');
@@ -109,6 +80,32 @@ app.post('/timeline', authenticateJWT, async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true, id: data[0].id });
+});
+
+app.put('/timeline/:id', authenticateJWT, async (req, res) => {
+  const { id } = req.params;
+  const { title, description, event_time } = req.body;
+  const user_id = req.user_id;
+  const { error } = await supabase
+    .from('timeline_events')
+    .update({ title, description, event_time })
+    .eq('id', id)
+    .eq('user_id', user_id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// Delete timeline event endpoint
+app.delete('/timeline/:id', authenticateJWT, async (req, res) => {
+  const { id } = req.params;
+  const user_id = req.user_id;
+  const { error } = await supabase
+    .from('timeline_events')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user_id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
 });
 
 // Secure /extract and /generate with JWT middleware
