@@ -10,7 +10,7 @@
 .progress-fill {
   height: 100%;
   background-color: #6a1b9a;
-  transition: width 0.5s ease;
+  transition: width 0.8s ease;
 }
 
 /* Only shimmer when isLoading is true */

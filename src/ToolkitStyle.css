@@ -205,6 +205,32 @@ body {
   padding: 1rem;
   margin-top: 0.5rem;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+/* specifically wrap the paragraph text */
+.timeline-card p {
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere;
+}
+
+/* if your title is ever long: */
+.timeline-card strong,
+.timeline-card .timeline-time {
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* ensure the dot+line don’t push cards wider */
+.timeline-item,
+.timeline-card {
+  max-width: 280px;  /* or whatever your width is */
+  box-sizing: border-box;
 }
 
 .timeline-dot {
