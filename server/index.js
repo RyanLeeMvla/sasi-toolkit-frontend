@@ -71,15 +71,30 @@ app.post('/timeline', authenticateJWT, async (req, res) => {
   const { title, description, event_time } = req.body;
   const user_id = req.user_id;
 
-  const { data, error } = await supabase.from('timeline_events').insert([{
-    user_id,
-    title: title || 'Untitled Event',
-    description: description || '',
-    event_time: event_time || new Date().toISOString()
-  }]);
+  try {
+    // 1) Insert and return the new row
+    const { data, error } = await supabase
+      .from('timeline_events')
+      .insert([{
+        user_id,
+        title:       title       || 'Untitled Event',
+        description: description || '',
+        event_time:  event_time  || new Date().toISOString()
+      }])
+      .select();  // ← crucial!
 
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true, id: data[0].id });
+    if (error) {
+      console.error('Supabase insert error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    // 2) Respond with success and the new record’s ID
+    return res.json({ success: true, id: data[0].id });
+
+  } catch (err) {
+    console.error('Unexpected error in /timeline:', err);
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 app.put('/timeline/:id', authenticateJWT, async (req, res) => {
