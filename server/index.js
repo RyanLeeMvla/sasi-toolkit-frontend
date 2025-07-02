@@ -67,35 +67,54 @@ app.post('/trigger-button', (req, res) => {
   res.json({ status: 'Button press emitted' });
 });
 
-app.post('/timeline', authenticateJWT, async (req, res) => {
-  const { title, description, event_time } = req.body;
-  const user_id = req.user_id;
-
+// 1) New route to produce a title
+app.post('/timeline/title', authenticateJWT, async (req, res) => {
+  const { transcript, summary } = req.body;
   try {
-    // 1) Insert and return the new row
+    const out = await openai.chat.completions.create({
+      model: 'gpt-4',
+      temperature: 0.3,
+      messages: [
+        { role: 'system',
+          content: `You are a concise headline generator. 
+Given a patient transcript and its summary, return a single short title (max 5 words). 
+Respond with nothing but the title text.` },
+        { role: 'user',
+          content: `Transcript: "${transcript}"\nSummary: "${summary}"` }
+      ]
+    });
+    const title = out.choices[0].message.content.trim();
+    return res.json({ title });
+  } catch (err) {
+    console.error('❌ /timeline/title error', err);
+    return res.status(500).json({ title: 'Voice Event' });
+  }
+});
+
+// 2) Enhance your /timeline insert to also store `transcript`
+app.post('/timeline', authenticateJWT, async (req, res) => {
+  const { title, description, event_time, transcript } = req.body;
+  const user_id = req.user_id;
+  try {
     const { data, error } = await supabase
       .from('timeline_events')
       .insert([{
         user_id,
-        title:       title       || 'Untitled Event',
-        description: description || '',
-        event_time:  event_time  || new Date().toISOString()
+        title,
+        description,
+        event_time: event_time || new Date().toISOString(),
+        transcript         // NEW column for the raw transcript
       }])
-      .select();  // ← crucial!
+      .select();    // make sure to select so data[0].id is populated
 
-    if (error) {
-      console.error('Supabase insert error:', error);
-      return res.status(500).json({ error: error.message });
-    }
-
-    // 2) Respond with success and the new record’s ID
+    if (error) throw error;
     return res.json({ success: true, id: data[0].id });
-
   } catch (err) {
-    console.error('Unexpected error in /timeline:', err);
+    console.error('❌ /timeline insert error', err);
     return res.status(500).json({ error: err.message });
   }
 });
+
 
 app.put('/timeline/:id', authenticateJWT, async (req, res) => {
   const { id } = req.params;

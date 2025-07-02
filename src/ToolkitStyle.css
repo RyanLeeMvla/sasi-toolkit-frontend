@@ -185,15 +185,11 @@ body {
   padding: 2rem 1rem; /* same as before */
 }
 
-/* 3) the rail now spans the track’s width */
-.timeline-line {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 100%;   /* now full track width! */
-  height: 2px;
-  background: #ccc;
-  z-index: 1;
+
+/* Hide the timeline rail/line */
+.timeline-line,
+.timeline-track::before {
+  display: none !important;
 }
 
 /* 4) items unchanged */

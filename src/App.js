@@ -142,14 +142,14 @@ function App() {
 
       try {
         const { data } = await supabase.auth.getSession();
-        const token = data?.session?.access_token;
+        const accessToken = data?.session?.access_token;
 
         // Run structured extraction
         const res = await fetch('https://sasi-toolkit.onrender.com/extract', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` })
+            ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
           },
           body: JSON.stringify({ transcript: fullTranscript })
         });
@@ -164,31 +164,42 @@ function App() {
         // Auto-run story generation
         handleSubmit(dataRes.symptom, dataRes.dismissal);
 
-        // 2️⃣ AI‐powered timeline trigger
-        const classifyRes = await fetch(`${API}/classify-timeline`, {
+        // 2️⃣ Pull in title before posting timeline event
+        const summaryText = dataRes.summary || '';
+
+        // 1) Ask the backend to generate a title
+        const titleRes = await fetch(`${API}/timeline/title`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token && { Authorization: `Bearer ${token}` })
+            ...(accessToken && { Authorization: `Bearer ${accessToken}` })
           },
-          body: JSON.stringify({ transcript: fullTranscript, summary: dataRes.summary })
+          body: JSON.stringify({
+            transcript: fullTranscript,
+            summary: summaryText
+          })
         });
-        const { addToTimeline } = await classifyRes.json();
-        if (addToTimeline) {
-          await fetch(`${API}/timeline`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token && { 'Authorization': `Bearer ${token}` })
-            },
-            body: JSON.stringify({
-              title: 'Voice Log',
-              description: fullTranscript
-            })
-          });
-          console.log("🕒 Timeline event created via AI trigger.");
+        const { title } = await titleRes.json();
+
+        // 2) Post your timeline event with { title, description: summary, transcript }
+        const timelineRes = await fetch(`${API}/timeline`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken && { Authorization: `Bearer ${accessToken}` })
+          },
+          body: JSON.stringify({
+            title,
+            description: summaryText,
+            transcript: fullTranscript
+          })
+        });
+        const tlJson = await timelineRes.json();
+        if (timelineRes.ok && tlJson.success) {
+          await fetchTimeline();
+          setVoiceTimelineMsg('✅ Event added: "' + title + '"');
         } else {
-          console.log("ℹ️ AI decided not to log this event.");
+          throw new Error(tlJson.error || 'Insert failed');
         }
 
         console.log("✅ Received structured data from backend:", dataRes);
@@ -370,6 +381,9 @@ function App() {
 
   // ...existing code...
 
+  // Voice timeline message state
+  const [voiceTimelineMsg, setVoiceTimelineMsg] = useState("");
+
   return (
     <div className="App">
       <h1>🧠 Storytelling Toolkit for Patients</h1>
@@ -471,6 +485,10 @@ function App() {
 
           <button onClick={exportTimelineAsPDF}>📄 Download PDF</button>
 
+          {voiceTimelineMsg && (
+            <div style={{margin:'1rem 0', color:'#2d7'}}> {voiceTimelineMsg} </div>
+          )}
+
           <hr />
 
           <h2>Your Timeline</h2>
@@ -506,7 +524,14 @@ function App() {
                       <div className="timeline-time">
                         {new Date(event.event_time).toLocaleString()}
                       </div>
+                      {/* use the AI summary */}
                       <p>{event.description}</p>
+                      {/* raw transcript underneath */}
+                      {event.transcript && (
+                        <p style={{fontStyle:'italic', marginTop:'0.5rem', color:'#555'}}>
+                          {event.transcript}
+                        </p>
+                      )}
                       <div className="button-group">
                         <button onClick={() => {
                           setEditingId(event.id);
