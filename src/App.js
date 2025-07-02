@@ -1,40 +1,3 @@
-  // Save timeline event edit
-  const saveEdit = async (id) => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-
-    await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        title: editTitle,
-        description: editDesc,
-        event_time: editTime
-      })
-    });
-
-    window.location.reload(); // or fetchTimeline() if you're going cleaner
-  };
-  // Delete timeline event
-  const deleteTimelineEvent = async (id) => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-
-    await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    // Option A: Quick page reload
-    window.location.reload();
-    // Option B: Remove from state (uncomment to use instead)
-    // setTimeline(prev => prev.filter(e => e.id !== id));
-  };
 import React, { useState, useEffect, useCallback } from 'react';
 import './ToolkitStyle.css';
 import ProgressBar from './ProgressBar';
@@ -122,28 +85,45 @@ function App() {
     if (user) fetchTimeline();
   }, [user, fetchTimeline]);
 
-  const addTimelineEvent = async () => {
+  // Timeline save edit (state-based refresh)
+  const saveEdit = async (id) => {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
 
-    const res = await fetch('https://sasi-toolkit.onrender.com/timeline', {
-      method: 'POST',
+    await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
+      method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
-        title: newTitle,
-        description: newDesc,
-        event_time: newTime
+        title: editTitle,
+        description: editDesc,
+        event_time: editTime
       })
     });
 
-    const result = await res.json();
+    setEditingId(null);
+    setEditTitle('');
+    setEditDesc('');
+    setEditTime('');
+    await fetchTimeline();
+  };
 
-    if (result.success) {
-      window.location.reload(); // ✅ Force full page reload
-    }
+  // Timeline delete (state-based refresh)
+  const deleteTimelineEvent = async (id) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    setEditingId(null);
+    await fetchTimeline();
   };
 
   if (!user) return <Login setUser={setUser} />;
