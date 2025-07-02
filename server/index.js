@@ -18,6 +18,8 @@ const PORT = process.env.PORT || 4000;
 const multer = require('multer');
 const fs = require('fs');
 const upload = multer({ dest: 'uploads/' });
+const WebSocket = require('ws');
+const path = require('path');
 
 // ✅ Enable CORS and JSON parsing
 app.use(cors());
@@ -259,6 +261,70 @@ Do not apologize or minimize the patient’s concerns. Use first-person language
     console.error(err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// helper to build a 44-byte WAV header
+function makeWavHeader(pcmLength) {
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(pcmLength + 36, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt16LE(1, 22); // Mono
+  header.writeUInt32LE(16000, 24); // Sample Rate
+  header.writeUInt32LE(16000 * 2, 28); // Byte rate
+  header.writeUInt16LE(2, 32); // Block align
+  header.writeUInt16LE(16, 34); // Bits/sample
+  header.write('data', 36);
+  header.writeUInt32LE(pcmLength, 40);
+  return header;
+}
+
+// WebSocket server for /record (raw PCM streaming, JWT-aware)
+const wsServer = new WebSocket.Server({ server: httpServer, path: '/record' });
+
+wsServer.on('connection', socket => {
+  let chunks = [];
+  let userJWT = null;
+
+  socket.on('message', async msg => {
+    if (typeof msg === 'string') {
+      const data = JSON.parse(msg);
+      if (data.type === 'auth') userJWT = data.token;
+      if (data.type === 'start') chunks = [];
+      if (data.type === 'stop') {
+        const pcm = Buffer.concat(chunks);
+        const wav = Buffer.concat([makeWavHeader(pcm.length), pcm]);
+        const filePath = path.join(__dirname, 'tmp.wav');
+        fs.writeFileSync(filePath, wav);
+
+        // Whisper transcription
+        const transcription = await openai.audio.transcriptions.create({
+          file: fs.createReadStream(filePath),
+          model: 'whisper-1'
+        });
+        fs.unlinkSync(filePath);
+
+        // Call local /extract endpoint with JWT
+        const fetch = require('node-fetch');
+        const result = await fetch('http://localhost:' + PORT + '/extract', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userJWT || ''}`
+          },
+          body: JSON.stringify({ transcript: transcription.text })
+        });
+
+        const payload = await result.json();
+        io.emit('transcriptionResult', { transcript: transcription.text, ...payload });
+      }
+    } else {
+      chunks.push(Buffer.from(msg));
+    }
+  });
 });
 
 // ✅ Start HTTP + WebSocket server

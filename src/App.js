@@ -44,6 +44,22 @@ function App() {
     return () => socket.disconnect();
   }, []);
 
+  // Listen for ESP32 button press and send JWT token
+  useEffect(() => {
+    socket.on('buttonPress', async () => {
+      console.log("🔐 ESP32 asked for token");
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (token) {
+        socket.emit('userToken', token);  // Send token back to ESP32
+        console.log("📤 Sent token to ESP32");
+      }
+    });
+    return () => {
+      socket.off('buttonPress');
+    };
+  }, []);
+
   if (!user) return <Login setUser={setUser} />;
 
   // 🎤 Single-field mic input
