@@ -5,6 +5,36 @@ import ProgressBar from './ProgressBar';
 import io from 'socket.io-client';
 import supabase from './supabaseClient';
 import Login from './Login';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+  // PDF Exporter for Timeline
+  const exportTimelineAsPDF = () => {
+    if (!timeline.length) return alert('No events to export.');
+
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text('🗓️ Patient Timeline', 14, 22);
+
+    // Table columns
+    const head = [['Date', 'Title', 'Description']];
+    // Table rows
+    const body = timeline.map(e => [
+      new Date(e.event_time).toLocaleString(),
+      e.title,
+      e.description
+    ]);
+
+    doc.autoTable({
+      head,
+      body,
+      startY: 30,
+      styles: { cellWidth: 'wrap' },
+      headStyles: { fillColor: [41, 128, 185] },
+      margin: { left: 14, right: 14 }
+    });
+
+    doc.save('timeline.pdf');
+  };
 
 // Central API base URL for all backend requests
 const API = 'https://sasi-toolkit.onrender.com';
@@ -431,6 +461,10 @@ function App() {
             style={{ width: '100%', marginBottom: '0.5rem' }}
           />
           <button className="generate" onClick={addTimelineEvent}>➕ Add to Timeline</button>
+
+          <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
+            <button onClick={exportTimelineAsPDF}>📄 Download PDF</button>
+          </div>
 
           <hr />
 
