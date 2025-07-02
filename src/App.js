@@ -69,9 +69,11 @@ function App() {
       supabase
         .from('timeline_events')
         .select('*')
-        .order('event_time', { ascending: false })
         .then(({ data, error }) => {
-          if (!error) setTimeline(data);
+          if (!error) {
+            const sorted = [...data].sort((a, b) => new Date(a.event_time) - new Date(b.event_time));
+            setTimeline(sorted);
+          }
         });
     }
   }, [user]);
@@ -94,8 +96,21 @@ function App() {
     });
 
     const result = await res.json();
+
     if (result.success) {
-      setTimeline([{ id: result.id, title: newTitle, description: newDesc, event_time: newTime }, ...timeline]);
+      const newEvent = {
+        id: result.id,
+        title: newTitle,
+        description: newDesc,
+        event_time: newTime
+      };
+
+      // ⏱️ Insert and sort
+      const updated = [newEvent, ...timeline].sort(
+        (a, b) => new Date(a.event_time) - new Date(b.event_time)
+      );
+
+      setTimeline(updated);
       setNewTitle('');
       setNewDesc('');
       setNewTime(new Date().toISOString().slice(0, 16));
