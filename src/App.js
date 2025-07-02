@@ -32,169 +32,8 @@ function App() {
   const [editDesc, setEditDesc] = useState('');
   const [editTime, setEditTime] = useState('');
 
-  // Expose supabase client for debugging
-  useEffect(() => {
-    window.supabase = supabase;
-  }, []);
 
-  // Add a new timeline event
-  const addTimelineEvent = async () => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-
-    await fetch('https://sasi-toolkit.onrender.com/timeline', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        title: newTitle,
-        description: newDesc,
-        event_time: newTime
-      })
-    });
-
-    setNewTitle('');
-    setNewDesc('');
-    setNewTime(new Date().toISOString().slice(0, 16));
-    await fetchTimeline();
-  };
-
-
-  // Listen for physical button press
-  useEffect(() => {
-    socket.on('buttonPress', () => {
-      console.log("🟢 Physical button pressed!");
-      handleFullVoiceInput();
-    });
-    return () => socket.off('buttonPress');
-    // eslint-disable-next-line
-  }, []);
-
-  // Get current user from Supabase
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-    });
-    const socket = io('https://sasi-toolkit.onrender.com');
-    socket.on('transcription_result', data => {
-      setSymptom(data.symptom);
-      setDismissal(data.dismissal);
-      setAction(data.action);
-      handleSubmit(data.symptom, data.dismissal);
-    });
-    return () => socket.disconnect();
-  }, []);
-
-  // Listen for ESP32 button press and send JWT token
-  useEffect(() => {
-    socket.on('buttonPress', async () => {
-      console.log("🔐 ESP32 asked for token");
-      const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token;
-      if (token) {
-        socket.emit('userToken', token);  // Send token back to ESP32
-        console.log("📤 Sent token to ESP32");
-      }
-    });
-    return () => {
-      socket.off('buttonPress');
-    };
-  }, []);
-
-  // Fetch timeline helper (useCallback for stable reference)
-  const fetchTimeline = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('timeline_events')
-      .select('*');
-    if (!error && data) {
-      const sorted = [...data].sort((a, b) => new Date(a.event_time) - new Date(b.event_time));
-      setTimeline(sorted);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) fetchTimeline();
-  }, [user, fetchTimeline]);
-
-  // Timeline save edit (state-based refresh)
-const saveEdit = async (id) => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-    if (!token) throw new Error('Not authenticated');
-
-    const res = await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        title: editTitle,
-        description: editDesc,
-        event_time: editTime
-      })
-    });
-
-    const json = await res.json();
-    if (!res.ok || !json.success) {
-      console.error('PUT failed:', json);
-      throw new Error(json.error || 'Unknown error');
-    }
-
-    setEditingId(null);
-    await fetchTimeline();
-  } catch (err) {
-    console.error('Error saving edit:', err);
-    alert(`Save failed: ${err.message}`);
-  }
-};
-
-  // Timeline delete (state-based refresh)
-const deleteTimelineEvent = async (id) => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-    const res = await fetch(`${API}/timeline/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const text = await res.text();
-    console.log('DELETE status', res.status, 'response:', text);
-    if (!res.ok) throw new Error(text);
-    await fetchTimeline();
-  } catch (err) {
-    console.error(err);
-    alert(`Delete failed: ${err.message}`);
-  }
-};
-
-
-
-  if (!user) return <Login setUser={setUser} />;
-
-  // 🎤 Single-field mic input
-  const startListening = (fieldSetter) => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return alert("Speech recognition not supported.");
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-    setListening(true);
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      fieldSetter(transcript);
-    };
-
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => setListening(false);
-    recognition.start();
-  };
+  // --- Move all helper functions above useEffect hooks ---
 
   // 🎤 Full voice input → backend extraction → autofill + run story
   const handleFullVoiceInput = async () => {
@@ -265,6 +104,171 @@ const deleteTimelineEvent = async (id) => {
     recognition.onerror = () => setListening(false);
     recognition.start();
   };
+
+  // Add a new timeline event
+  const addTimelineEvent = async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    await fetch('https://sasi-toolkit.onrender.com/timeline', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        title: newTitle,
+        description: newDesc,
+        event_time: newTime
+      })
+    });
+
+    setNewTitle('');
+    setNewDesc('');
+    setNewTime(new Date().toISOString().slice(0, 16));
+    await fetchTimeline();
+  };
+
+  // Fetch timeline helper (useCallback for stable reference)
+  const fetchTimeline = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('timeline_events')
+      .select('*');
+    if (!error && data) {
+      const sorted = [...data].sort((a, b) => new Date(a.event_time) - new Date(b.event_time));
+      setTimeline(sorted);
+    }
+  }, []);
+
+  // Timeline save edit (state-based refresh)
+  const saveEdit = async (id) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: editTitle,
+          description: editDesc,
+          event_time: editTime
+        })
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        console.error('PUT failed:', json);
+        throw new Error(json.error || 'Unknown error');
+      }
+
+      setEditingId(null);
+      await fetchTimeline();
+    } catch (err) {
+      console.error('Error saving edit:', err);
+      alert(`Save failed: ${err.message}`);
+    }
+  };
+
+  // Timeline delete (state-based refresh)
+  const deleteTimelineEvent = async (id) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`${API}/timeline/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const text = await res.text();
+      console.log('DELETE status', res.status, 'response:', text);
+      if (!res.ok) throw new Error(text);
+      await fetchTimeline();
+    } catch (err) {
+      console.error(err);
+      alert(`Delete failed: ${err.message}`);
+    }
+  };
+
+  // Expose supabase client for debugging
+  useEffect(() => {
+    window.supabase = supabase;
+  }, []);
+
+  // Listen for physical button press
+  useEffect(() => {
+    socket.on('buttonPress', () => {
+      console.log("🟢 Physical button pressed!");
+      handleFullVoiceInput();
+    });
+    return () => socket.off('buttonPress');
+    // eslint-disable-next-line
+  }, []);
+
+  // Get current user from Supabase
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+    const socket = io('https://sasi-toolkit.onrender.com');
+    socket.on('transcription_result', data => {
+      setSymptom(data.symptom);
+      setDismissal(data.dismissal);
+      setAction(data.action);
+      handleSubmit(data.symptom, data.dismissal);
+    });
+    return () => socket.disconnect();
+  }, []);
+
+  // Listen for ESP32 button press and send JWT token
+  useEffect(() => {
+    socket.on('buttonPress', async () => {
+      console.log("🔐 ESP32 asked for token");
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (token) {
+        socket.emit('userToken', token);  // Send token back to ESP32
+        console.log("📤 Sent token to ESP32");
+      }
+    });
+    return () => {
+      socket.off('buttonPress');
+    };
+  }, []);
+
+  useEffect(() => {
+    if (user) fetchTimeline();
+  }, [user, fetchTimeline]);
+
+
+
+  if (!user) return <Login setUser={setUser} />;
+
+  // 🎤 Single-field mic input
+  const startListening = (fieldSetter) => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert("Speech recognition not supported.");
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    setListening(true);
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      fieldSetter(transcript);
+    };
+
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
+    recognition.start();
+  };
+
+
 
   // ✍️ Generate AI story
   const handleSubmit = async (customSymptom, customDismissal) => {
