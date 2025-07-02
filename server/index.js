@@ -173,6 +173,14 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
     console.log("📝 Transcript:", transcription.text);
 
     // Pipe result to existing /extract logic
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('file', fs.createReadStream(audioPath), {
+      filename: 'rec.wav', // force correct filename
+      contentType: 'audio/wav', // force MIME type
+    });
+
+    // Send form to /extract
     const extractRes = await fetch(`https://sasi-toolkit.onrender.com/extract`, {
       method: 'POST',
       headers: {
@@ -224,7 +232,7 @@ The response should:
 - Be at least 4 sentences long.
 - Use direct, educated language that builds trust but firmly requests care.
 - Adress the patient's specific symptom and the doctor's dismissal, include word for word.
-- Include at least one legal citation using its actual law code or regulation number in quotes.
+- Include at least one legal citation using its actual law code or regulation number in "quotes".
 Do not apologize or minimize the patient’s concerns. Use first-person language (e.g., "I appreciate", "I understand", "I request").`
         }
       ]
