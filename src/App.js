@@ -167,42 +167,55 @@ function App() {
         // Auto-run story generation
         handleSubmit(dataRes.symptom, dataRes.dismissal);
 
-        // 2️⃣ Pull in title before posting timeline event
-        const summaryText = dataRes.summary || '';
-
-        // 1) Ask the backend to generate a title
-        const titleRes = await fetch(`${API}/timeline/title`, {
+        // --- Selective timeline add via trigger phrase or AI ---
+        // 1. Ask backend if this should be added to timeline
+        const classifyRes = await fetch(`${API}/classify-timeline`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(accessToken && { Authorization: `Bearer ${accessToken}` })
           },
-          body: JSON.stringify({
-            transcript: fullTranscript,
-            summary: summaryText
-          })
+          body: JSON.stringify({ transcript: fullTranscript, summary: dataRes.summary })
         });
-        const { title } = await titleRes.json();
-
-        // 2) Post your timeline event with { title, description: summary, transcript }
-        const timelineRes = await fetch(`${API}/timeline`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(accessToken && { Authorization: `Bearer ${accessToken}` })
-          },
-          body: JSON.stringify({
-            title,
-            description: summaryText,
-            transcript: fullTranscript
-          })
-        });
-        const tlJson = await timelineRes.json();
-        if (timelineRes.ok && tlJson.success) {
-          await fetchTimeline();
-          setVoiceTimelineMsg('✅ Event added: "' + title + '"');
+        const { addToTimeline } = await classifyRes.json();
+        if (addToTimeline) {
+          // 2. Pull in title before posting timeline event
+          const summaryText = dataRes.summary || '';
+          // 3. Ask the backend to generate a title
+          const titleRes = await fetch(`${API}/timeline/title`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(accessToken && { Authorization: `Bearer ${accessToken}` })
+            },
+            body: JSON.stringify({
+              transcript: fullTranscript,
+              summary: summaryText
+            })
+          });
+          const { title } = await titleRes.json();
+          // 4. Post your timeline event with { title, description: summary, transcript }
+          const timelineRes = await fetch(`${API}/timeline`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(accessToken && { Authorization: `Bearer ${accessToken}` })
+            },
+            body: JSON.stringify({
+              title,
+              description: summaryText,
+              transcript: fullTranscript
+            })
+          });
+          const tlJson = await timelineRes.json();
+          if (timelineRes.ok && tlJson.success) {
+            await fetchTimeline();
+            setVoiceTimelineMsg('✅ Event added: "' + title + '"');
+          } else {
+            throw new Error(tlJson.error || 'Insert failed');
+          }
         } else {
-          throw new Error(tlJson.error || 'Insert failed');
+          setVoiceTimelineMsg('ℹ️ No timeline event added (no trigger phrase detected).');
         }
 
         console.log("✅ Received structured data from backend:", dataRes);
