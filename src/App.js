@@ -5,8 +5,8 @@ import ProgressBar from './ProgressBar';
 import io from 'socket.io-client';
 import supabase from './supabaseClient';
 import Login from './Login';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Central API base URL for all backend requests
 const API = 'https://sasi-toolkit.onrender.com';
@@ -38,11 +38,14 @@ function App() {
 
   // PDF Exporter for Timeline (after timeline state is declared)
   const exportTimelineAsPDF = () => {
-    if (!timeline.length) return alert('No events to export.');
+    if (!timeline.length) {
+      alert('No events to export.');
+      return;
+    }
 
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.text('🗓️ My Patient Timeline', 14, 22);
+    doc.text('🗓️ Patient Timeline', 14, 22);
 
     const head = [['Date', 'Title', 'Description']];
     const body = timeline.map(e => [
@@ -51,7 +54,7 @@ function App() {
       e.description
     ]);
 
-    doc.autoTable({
+    autoTable(doc, {
       head,
       body,
       startY: 30,
