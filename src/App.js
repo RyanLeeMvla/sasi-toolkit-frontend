@@ -33,9 +33,65 @@ function App() {
   const [editTime, setEditTime] = useState('');
 
 
+
   // --- Move all helper functions above useEffect hooks ---
 
-  // 🎤 Full voice input → backend extraction → autofill + run story
+  // 1️⃣ Define handleSubmit before any helper that calls it
+  const handleSubmit = async (customSymptom, customDismissal) => {
+    const usedSymptom = customSymptom !== undefined ? customSymptom : symptom;
+    const usedDismissal = customDismissal !== undefined ? customDismissal : dismissal;
+
+    // 1️⃣ Pull in the timeline events as context
+    const { data: timelineEvents } = await supabase
+      .from('timeline_events')
+      .select('title,description,event_time')
+      .order('event_time', { ascending: true });
+
+    setIsLoading(true);
+    setResponse('Generating story…');
+    setProgress(0);
+    await new Promise(res => setTimeout(res, 300));
+
+    let progressValue = 0;
+    const interval = setInterval(() => {
+      progressValue += 5;
+      if (progressValue < 90) setProgress(progressValue);
+      else clearInterval(interval);
+    }, 300);
+
+    try {
+      // Get JWT access token from Supabase
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data?.session?.access_token;
+
+      const res = await fetch('https://sasi-toolkit.onrender.com/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
+        },
+        body: JSON.stringify({
+          symptom: usedSymptom,
+          dismissal: usedDismissal,
+          timeline: timelineEvents
+        })
+      });
+
+      const dataRes = await res.json();
+      clearInterval(interval);
+      setProgress(100);
+      await new Promise(res => setTimeout(res, 300));
+      setIsLoading(false);
+      setResponse(`💬 AI Sentence:\n${dataRes.message}`);
+    } catch (err) {
+      clearInterval(interval);
+      setProgress(0);
+      setIsLoading(false);
+      setResponse('Error: ' + err.message);
+    }
+  };
+
+  // 2️⃣ Now define handleFullVoiceInput after handleSubmit
   const handleFullVoiceInput = async () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return alert("Speech recognition not supported.");
@@ -270,60 +326,7 @@ function App() {
 
 
 
-  // ✍️ Generate AI story
-  const handleSubmit = async (customSymptom, customDismissal) => {
-    const usedSymptom = customSymptom !== undefined ? customSymptom : symptom;
-    const usedDismissal = customDismissal !== undefined ? customDismissal : dismissal;
-
-    // 1️⃣ Pull in the timeline events as context
-    const { data: timelineEvents } = await supabase
-      .from('timeline_events')
-      .select('title,description,event_time')
-      .order('event_time', { ascending: true });
-
-    setIsLoading(true);
-    setResponse('Generating story…');
-    setProgress(0);
-    await new Promise(res => setTimeout(res, 300));
-
-    let progressValue = 0;
-    const interval = setInterval(() => {
-      progressValue += 5;
-      if (progressValue < 90) setProgress(progressValue);
-      else clearInterval(interval);
-    }, 300);
-
-    try {
-      // Get JWT access token from Supabase
-      const { data } = await supabase.auth.getSession();
-      const accessToken = data?.session?.access_token;
-
-      const res = await fetch('https://sasi-toolkit.onrender.com/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
-        },
-        body: JSON.stringify({
-          symptom: usedSymptom,
-          dismissal: usedDismissal,
-          timeline: timelineEvents
-        })
-      });
-
-      const dataRes = await res.json();
-      clearInterval(interval);
-      setProgress(100);
-      await new Promise(res => setTimeout(res, 300));
-      setIsLoading(false);
-      setResponse(`💬 AI Sentence:\n${dataRes.message}`);
-    } catch (err) {
-      clearInterval(interval);
-      setProgress(0);
-      setIsLoading(false);
-      setResponse('Error: ' + err.message);
-    }
-  };
+  // ...existing code...
 
   return (
     <div className="App">
