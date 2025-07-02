@@ -64,18 +64,19 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      supabase
-        .from('timeline_events')
-        .select('*')
-        .then(({ data, error }) => {
-          if (!error) {
-            const sorted = [...data].sort((a, b) => new Date(a.event_time) - new Date(b.event_time));
-            setTimeline(sorted);
-          }
-        });
+  // Fetch timeline helper
+  const fetchTimeline = async () => {
+    const { data, error } = await supabase
+      .from('timeline_events')
+      .select('*');
+    if (!error) {
+      const sorted = [...data].sort((a, b) => new Date(a.event_time) - new Date(b.event_time));
+      setTimeline(sorted);
     }
+  };
+
+  useEffect(() => {
+    if (user) fetchTimeline();
   }, [user]);
 
   const addTimelineEvent = async () => {
@@ -98,19 +99,7 @@ function App() {
     const result = await res.json();
 
     if (result.success) {
-      const newEvent = {
-        id: result.id,
-        title: newTitle,
-        description: newDesc,
-        event_time: newTime
-      };
-
-      // ⏱️ Insert and sort
-      const updated = [newEvent, ...timeline].sort(
-        (a, b) => new Date(a.event_time) - new Date(b.event_time)
-      );
-
-      setTimeline(updated);
+      await fetchTimeline();
       setNewTitle('');
       setNewDesc('');
       setNewTime(new Date().toISOString().slice(0, 16));
