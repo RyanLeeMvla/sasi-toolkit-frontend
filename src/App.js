@@ -130,104 +130,89 @@ function App() {
 
   // 2️⃣ Now define handleFullVoiceInput after handleSubmit
   const handleFullVoiceInput = async () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return alert("Speech recognition not supported.");
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return alert("Speech recognition not supported.");
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
+    const rec = new SR();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = 'en-US';
     setListening(true);
 
-    recognition.onresult = async (event) => {
-      const fullTranscript = event.results[0][0].transcript;
-      console.log("🎤 Full transcript:", fullTranscript);
+    rec.onresult = async (e) => {
+      const transcript = e.results[0][0].transcript.trim();
+      console.log("🎤 Full transcript:", transcript);
 
-      try {
-        const { data } = await supabase.auth.getSession();
-        const accessToken = data?.session?.access_token;
+      // 1) Extract + summary
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const extractRes = await fetch(`${API}/extract`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({ transcript })
+      });
+      const { symptom, dismissal, action, summary } = await extractRes.json();
+      setSymptom(symptom); setDismissal(dismissal); setAction(action);
+      setSummary(summary);
 
-        // Run structured extraction
-        const res = await fetch('https://sasi-toolkit.onrender.com/extract', {
+      // 2) Ask the AI: should we add this?
+      const classifyRes = await fetch(`${API}/classify-timeline`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({ transcript, summary })
+      });
+      const { addToTimeline } = await classifyRes.json();
+
+      // 3) Only if AI says “yes”
+      if (addToTimeline) {
+        // 3a) Generate a title
+        const titleRes = await fetch(`${API}/timeline/title`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
+            ...(token && { Authorization: `Bearer ${token}` })
           },
-          body: JSON.stringify({ transcript: fullTranscript })
+          body: JSON.stringify({ transcript, summary })
         });
+        const { title } = await titleRes.json();
 
-        const dataRes = await res.json();
-
-        setSymptom(dataRes.symptom || '');
-        setDismissal(dataRes.dismissal || '');
-        setAction(dataRes.action || '');
-        setSummary(dataRes.summary || '');
-
-        // Auto-run story generation
-        handleSubmit(dataRes.symptom, dataRes.dismissal);
-
-        // --- Selective timeline add via trigger phrase or AI ---
-        // 1. Ask backend if this should be added to timeline
-        const classifyRes = await fetch(`${API}/classify-timeline`, {
+        // 3b) Insert the event
+        const insertRes = await fetch(`${API}/timeline`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(accessToken && { Authorization: `Bearer ${accessToken}` })
+            ...(token && { Authorization: `Bearer ${token}` })
           },
-          body: JSON.stringify({ transcript: fullTranscript, summary: dataRes.summary })
+          body: JSON.stringify({
+            title,
+            description: summary,
+            transcript
+          })
         });
-        const { addToTimeline } = await classifyRes.json();
-        if (addToTimeline) {
-          // 2. Pull in title before posting timeline event
-          const summaryText = dataRes.summary || '';
-          // 3. Ask the backend to generate a title
-          const titleRes = await fetch(`${API}/timeline/title`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(accessToken && { Authorization: `Bearer ${accessToken}` })
-            },
-            body: JSON.stringify({
-              transcript: fullTranscript,
-              summary: summaryText
-            })
-          });
-          const { title } = await titleRes.json();
-          // 4. Post your timeline event with { title, description: summary, transcript }
-          const timelineRes = await fetch(`${API}/timeline`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(accessToken && { Authorization: `Bearer ${accessToken}` })
-            },
-            body: JSON.stringify({
-              title,
-              description: summaryText,
-              transcript: fullTranscript
-            })
-          });
-          const tlJson = await timelineRes.json();
-          if (timelineRes.ok && tlJson.success) {
-            await fetchTimeline();
-            setVoiceTimelineMsg('✅ Event added: "' + title + '"');
-          } else {
-            throw new Error(tlJson.error || 'Insert failed');
-          }
+        const insertJson = await insertRes.json();
+        if (insertRes.ok && insertJson.success) {
+          setVoiceTimelineMsg(`✅ Event added: "${title}"`);
+          await fetchTimeline();
         } else {
-          setVoiceTimelineMsg('ℹ️ No timeline event added (no trigger phrase detected).');
+          throw new Error(insertJson.error || 'Insert failed');
         }
-
-        console.log("✅ Received structured data from backend:", dataRes);
-      } catch (err) {
-        console.error("Error parsing transcript:", err);
-        setResponse("Error parsing voice transcript.");
+      } else {
+        setVoiceTimelineMsg('ℹ️ AI decided not to log this to timeline.');
       }
+
+      // 4) Finally, generate the story as normal
+      handleSubmit(symptom, dismissal);
+      setListening(false);
     };
 
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => setListening(false);
-    recognition.start();
+    rec.onerror = () => setListening(false);
+    rec.start();
   };
 
   // Add a new timeline event
