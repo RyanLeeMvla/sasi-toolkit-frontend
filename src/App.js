@@ -1,26 +1,4 @@
-  // Add a new timeline event
-  const addTimelineEvent = async () => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
 
-    await fetch('https://sasi-toolkit.onrender.com/timeline', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        title: newTitle,
-        description: newDesc,
-        event_time: newTime
-      })
-    });
-
-    setNewTitle('');
-    setNewDesc('');
-    setNewTime(new Date().toISOString().slice(0, 16));
-    await fetchTimeline();
-  };
 import React, { useState, useEffect, useCallback } from 'react';
 import './ToolkitStyle.css';
 import ProgressBar from './ProgressBar';
@@ -50,6 +28,30 @@ function App() {
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editTime, setEditTime] = useState('');
+
+  // Add a new timeline event
+  const addTimelineEvent = async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    await fetch('https://sasi-toolkit.onrender.com/timeline', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        title: newTitle,
+        description: newDesc,
+        event_time: newTime
+      })
+    });
+
+    setNewTitle('');
+    setNewDesc('');
+    setNewTime(new Date().toISOString().slice(0, 16));
+    await fetchTimeline();
+  };
 
 
   // Listen for physical button press
