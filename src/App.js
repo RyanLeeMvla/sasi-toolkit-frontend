@@ -178,6 +178,10 @@ function App() {
       const { addToTimeline } = await classifyRes.json();
       console.log("🤖 AI addToTimeline:", addToTimeline);
 
+      // Use correct variables for accessToken and fullTranscript
+      const accessToken = token;
+      const fullTranscript = transcript;
+
       if (addToTimeline) {
         console.log("🕒 AI decided to log this event → generating title…");
         // generate title
