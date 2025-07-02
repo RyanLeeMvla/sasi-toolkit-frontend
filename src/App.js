@@ -22,6 +22,7 @@ function App() {
   const [listening, setListening] = useState(false);
   const [user, setUser] = useState(null);
   const [response, setResponse] = useState('Your AI-generated response will appear here.');
+  const [summary, setSummary] = useState('');        // ← add this
   const [timeline, setTimeline] = useState([]);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
@@ -126,9 +127,13 @@ function App() {
 
         const dataRes = await res.json();
 
+
         setSymptom(dataRes.symptom || '');
         setDismissal(dataRes.dismissal || '');
         setAction(dataRes.action || '');
+
+        // display the transcript summary in its own field
+        setSummary(dataRes.summary || '');
 
         // Auto-run story generation
         handleSubmit(dataRes.symptom, dataRes.dismissal);
@@ -365,9 +370,16 @@ function App() {
 
           <button className="generate" onClick={() => handleSubmit()}>🌸 Generate Story</button>
 
-          {listening && (
-            <div className="listening-indicator">🎙️ Listening...</div>
-          )}
+          {listening && <div className="listening-indicator">🎙️ Listening...</div>}
+
+          {/* ───────── Summary field ───────── */}
+          <label>Transcript Summary:</label>
+          <textarea
+            readOnly
+            value={summary}
+            className="response-box"
+            style={{ width: '100%', height: '4rem', margin: '1rem 0' }}
+          />
 
           <ProgressBar progress={progress} isLoading={isLoading} />
 
