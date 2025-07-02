@@ -7,17 +7,44 @@ import supabase from './supabaseClient';
 import Login from './Login';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-  // PDF Exporter for Timeline
+
+// Central API base URL for all backend requests
+const API = 'https://sasi-toolkit.onrender.com';
+
+// ✅ Point to Render backend (adjust this if you set up an environment variable later)
+const socket = io('https://sasi-toolkit.onrender.com');
+
+function App() {
+  // --- your existing state ---
+  const [tab, setTab] = useState('story');
+  const [symptom, setSymptom] = useState('');
+  const [dismissal, setDismissal] = useState('');
+  const [action, setAction] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [user, setUser] = useState(null);
+  const [response, setResponse] = useState('Your AI-generated response will appear here.');
+  const [summary, setSummary] = useState('');
+  const [timeline, setTimeline] = useState([]);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+  const [newTime, setNewTime] = useState(new Date().toISOString().slice(0, 16)); // 'YYYY-MM-DDTHH:mm'
+  // Timeline edit state
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editTime, setEditTime] = useState('');
+
+  // PDF Exporter for Timeline (after timeline state is declared)
   const exportTimelineAsPDF = () => {
     if (!timeline.length) return alert('No events to export.');
 
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.text('🗓️ Patient Timeline', 14, 22);
+    doc.text('🗓️ My Patient Timeline', 14, 22);
 
-    // Table columns
     const head = [['Date', 'Title', 'Description']];
-    // Table rows
     const body = timeline.map(e => [
       new Date(e.event_time).toLocaleString(),
       e.title,
@@ -35,33 +62,6 @@ import 'jspdf-autotable';
 
     doc.save('timeline.pdf');
   };
-
-// Central API base URL for all backend requests
-const API = 'https://sasi-toolkit.onrender.com';
-
-// ✅ Point to Render backend (adjust this if you set up an environment variable later)
-const socket = io('https://sasi-toolkit.onrender.com');
-
-function App() {
-  const [tab, setTab] = useState('story');
-  const [symptom, setSymptom] = useState('');
-  const [dismissal, setDismissal] = useState('');
-  const [action, setAction] = useState('');
-  const [progress, setProgress] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [user, setUser] = useState(null);
-  const [response, setResponse] = useState('Your AI-generated response will appear here.');
-  const [summary, setSummary] = useState('');        // ← add this
-  const [timeline, setTimeline] = useState([]);
-  const [newTitle, setNewTitle] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [newTime, setNewTime] = useState(new Date().toISOString().slice(0, 16)); // 'YYYY-MM-DDTHH:mm'
-  // Timeline edit state
-  const [editingId, setEditingId] = useState(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [editDesc, setEditDesc] = useState('');
-  const [editTime, setEditTime] = useState('');
 
 
 
@@ -462,9 +462,7 @@ function App() {
           />
           <button className="generate" onClick={addTimelineEvent}>➕ Add to Timeline</button>
 
-          <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
-            <button onClick={exportTimelineAsPDF}>📄 Download PDF</button>
-          </div>
+          <button onClick={exportTimelineAsPDF}>📄 Download PDF</button>
 
           <hr />
 
