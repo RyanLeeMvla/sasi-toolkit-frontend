@@ -35,6 +35,9 @@ function App() {
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editTime, setEditTime] = useState('');
+  
+  // Voice timeline message state (must be declared with other hooks, not inside a conditional or after return)
+  const [voiceTimelineMsg, setVoiceTimelineMsg] = useState("");
 
   // PDF Exporter for Timeline (after timeline state is declared)
   const exportTimelineAsPDF = () => {
@@ -381,8 +384,6 @@ function App() {
 
   // ...existing code...
 
-  // Voice timeline message state
-  const [voiceTimelineMsg, setVoiceTimelineMsg] = useState("");
 
   return (
     <div className="App">
