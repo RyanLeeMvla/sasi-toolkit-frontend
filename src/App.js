@@ -413,24 +413,41 @@ const deleteTimelineEvent = async (id) => {
                 <div className="timeline-dot"></div>
                 {editingId === event.id ? (
                   <div className="timeline-card">
-                    <input value={editTitle} onChange={e => setEditTitle(e.target.value)} />
-                    <input type="datetime-local" value={editTime} onChange={e => setEditTime(e.target.value)} />
-                    <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} />
-                    <button onClick={() => saveEdit(event.id)}>✅ Save</button>
-                    <button onClick={() => setEditingId(null)}>❌ Cancel</button>
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={e => setEditTitle(e.target.value)}
+                    />
+                    <input
+                      type="datetime-local"
+                      value={editTime}
+                      onChange={e => setEditTime(e.target.value)}
+                    />
+                    <textarea
+                      value={editDesc}
+                      onChange={e => setEditDesc(e.target.value)}
+                    />
+                    <div className="button-group">
+                      <button onClick={() => saveEdit(event.id)}>✅ Save</button>
+                      <button onClick={() => setEditingId(null)}>❌ Cancel</button>
+                    </div>
                   </div>
                 ) : (
                   <div className="timeline-card">
                     <strong>{event.title}</strong>
-                    <div className="timeline-time">{new Date(event.event_time).toLocaleString()}</div>
+                    <div className="timeline-time">
+                      {new Date(event.event_time).toLocaleString()}
+                    </div>
                     <p>{event.description}</p>
-                    <button onClick={() => {
-                      setEditingId(event.id);
-                      setEditTitle(event.title);
-                      setEditDesc(event.description);
-                      setEditTime(new Date(event.event_time).toISOString().slice(0, 16));
-                    }}>✏️ Edit</button>
-                    <button onClick={() => deleteTimelineEvent(event.id)}>🗑️ Delete</button>
+                    <div className="button-group">
+                      <button onClick={() => {
+                        setEditingId(event.id);
+                        setEditTitle(event.title);
+                        setEditDesc(event.description);
+                        setEditTime(new Date(event.event_time).toISOString().slice(0,16));
+                      }}>✏️ Edit</button>
+                      <button onClick={() => deleteTimelineEvent(event.id)}>🗑️ Delete</button>
+                    </div>
                   </div>
                 )}
               </div>
