@@ -67,29 +67,28 @@ app.post('/trigger-button', (req, res) => {
   res.json({ status: 'Button press emitted' });
 });
 
-// 1) New route to produce a title
+
 app.post('/timeline/title', authenticateJWT, async (req, res) => {
   const { transcript, summary } = req.body;
   try {
-    const out = await openai.chat.completions.create({
+    const completion = await openai.chat.completions.create({
       model: 'gpt-4',
       temperature: 0.3,
       messages: [
-        { role: 'system',
-          content: `You are a concise headline generator. 
-Given a patient transcript and its summary, return a single short title (max 5 words). 
-Respond with nothing but the title text.` },
-        { role: 'user',
-          content: `Transcript: "${transcript}"\nSummary: "${summary}"` }
+        { role: 'system', content: `
+You’re a concise headline generator. Given a patient transcript and its summary, 
+return exactly one short title (max 5 words) that captures the event. No extra text.`.trim() },
+        { role: 'user', content: `Transcript: "${transcript}"\nSummary: "${summary}"` }
       ]
     });
-    const title = out.choices[0].message.content.trim();
+    const title = completion.choices[0].message.content.trim();
     return res.json({ title });
   } catch (err) {
-    console.error('❌ /timeline/title error', err);
+    console.error('/timeline/title error', err);
     return res.status(500).json({ title: 'Voice Event' });
   }
 });
+
 
 // 2) Enhance your /timeline insert to also store `transcript`
 app.post('/timeline', authenticateJWT, async (req, res) => {

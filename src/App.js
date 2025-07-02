@@ -144,10 +144,24 @@ function App() {
       console.log("🎤 Transcript:", transcript);
 
       // 1) Extract + summary
+      // inside handleFullVoiceInput, before you call /extract:
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      const extractRes = await fetch(`${API}/extract`, { /*…*/ });
+
+      const extractRes = await fetch(`${API}/extract`, {
+        method: 'POST',                   // ← must be POST
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({ transcript })
+      });
+      if (!extractRes.ok) {
+        console.error('Extract failed', await extractRes.text());
+        return;
+      }
       const { symptom, dismissal, action, summary } = await extractRes.json();
+
       setSymptom(symptom); setDismissal(dismissal); setAction(action); setSummary(summary);
 
       // 2) Classify via AI
@@ -155,7 +169,11 @@ function App() {
       const classifyRes = await fetch(`${API}/classify-timeline`, {
         method: 'POST',
         headers: { 'Content-Type':'application/json', ...(token && {Authorization:`Bearer ${token}`}) },
-        body: JSON.stringify({ transcript, summary })
+        body: JSON.stringify({
+          transcript,
+          summary,
+          systemPrompt: `Return { addToTimeline: true } only if the user explicitly asks (in any wording) to add or log this event to their timeline. For example, the phrase "Add this to timeline," but doesn't need to be hardcoded. Otherwise return { addToTimeline: false }.`
+        })
       });
       const { addToTimeline } = await classifyRes.json();
       console.log("🤖 AI addToTimeline:", addToTimeline);
