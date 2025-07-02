@@ -140,35 +140,15 @@ function App() {
       const fullTranscript = event.results[0][0].transcript;
       console.log("🎤 Full transcript:", fullTranscript);
 
-      // 🗣️ Voice-triggered Add to Timeline
-      if (/add (this )?to timeline/i.test(fullTranscript)) {
-        try {
-          const { data } = await supabase.auth.getSession();
-          const accessToken = data?.session?.access_token;
-
-          await fetch('https://sasi-toolkit.onrender.com/timeline', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${accessToken}`
-            },
-            body: JSON.stringify({
-              title: 'Voice Log',
-              description: fullTranscript
-            })
-          });
-          setResponse('🗂️ Added to timeline by voice command.');
-        } catch (err) {
-          setResponse('Error adding to timeline: ' + err.message);
-        }
-        return;
-      }
+      const lowerTranscript = fullTranscript.toLowerCase();
+      // Check for timeline trigger
+      const shouldAddToTimeline = /add (this|that|it)? ?to (my )?timeline/.test(lowerTranscript);
 
       try {
-        // Get JWT access token from Supabase
         const { data } = await supabase.auth.getSession();
         const accessToken = data?.session?.access_token;
 
+        // Run structured extraction
         const res = await fetch('https://sasi-toolkit.onrender.com/extract', {
           method: 'POST',
           headers: {
@@ -186,6 +166,23 @@ function App() {
 
         // Auto-run story generation
         handleSubmit(dataRes.symptom, dataRes.dismissal);
+
+        // ✅ If "add to timeline" phrase is detected
+        if (shouldAddToTimeline) {
+          await fetch('https://sasi-toolkit.onrender.com/timeline', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
+            },
+            body: JSON.stringify({
+              title: 'Voice Log',
+              description: fullTranscript
+            })
+          });
+          console.log("🕒 Timeline event created via voice.");
+        }
+
         console.log("✅ Received structured data from backend:", dataRes);
       } catch (err) {
         console.error("Error parsing transcript:", err);
@@ -315,22 +312,42 @@ function App() {
       {tab === 'timeline' && (
         <div className="panel">
           <h2>Add a Timeline Event</h2>
-          <input placeholder="Title" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
-          <textarea placeholder="Description" value={newDesc} onChange={e => setNewDesc(e.target.value)} />
-          <input type="datetime-local" value={newTime} onChange={e => setNewTime(e.target.value)} />
-          <button onClick={addTimelineEvent}>➕ Add to Timeline</button>
+          <input
+            placeholder="Title"
+            value={newTitle}
+            onChange={e => setNewTitle(e.target.value)}
+            style={{ width: '100%', marginBottom: '0.5rem' }}
+          />
+          <textarea
+            placeholder="Description"
+            value={newDesc}
+            onChange={e => setNewDesc(e.target.value)}
+            style={{ width: '100%', marginBottom: '0.5rem' }}
+          />
+          <input
+            type="datetime-local"
+            value={newTime}
+            onChange={e => setNewTime(e.target.value)}
+            style={{ width: '100%', marginBottom: '0.5rem' }}
+          />
+          <button className="generate" onClick={addTimelineEvent}>➕ Add to Timeline</button>
 
           <hr />
 
           <h2>Your Timeline</h2>
-          <ul>
+          <div className="timeline-container">
+            <div className="timeline-line"></div>
             {timeline.map(event => (
-              <li key={event.id}>
-                <strong>{event.title}</strong> – {new Date(event.event_time).toLocaleString()}
-                <p>{event.description}</p>
-              </li>
+              <div className="timeline-item" key={event.id}>
+                <div className="timeline-dot"></div>
+                <div className="timeline-card">
+                  <strong>{event.title}</strong>
+                  <div className="timeline-time">{new Date(event.event_time).toLocaleString()}</div>
+                  <p>{event.description}</p>
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 
