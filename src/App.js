@@ -1,3 +1,40 @@
+  // Save timeline event edit
+  const saveEdit = async (id) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        title: editTitle,
+        description: editDesc,
+        event_time: editTime
+      })
+    });
+
+    window.location.reload(); // or fetchTimeline() if you're going cleaner
+  };
+  // Delete timeline event
+  const deleteTimelineEvent = async (id) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    // Option A: Quick page reload
+    window.location.reload();
+    // Option B: Remove from state (uncomment to use instead)
+    // setTimeline(prev => prev.filter(e => e.id !== id));
+  };
 import React, { useState, useEffect, useCallback } from 'react';
 import './ToolkitStyle.css';
 import ProgressBar from './ProgressBar';
@@ -22,6 +59,11 @@ function App() {
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newTime, setNewTime] = useState(new Date().toISOString().slice(0, 16)); // 'YYYY-MM-DDTHH:mm'
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editTime, setEditTime] = useState('');
+
 
   // Listen for physical button press
   useEffect(() => {
@@ -341,11 +383,28 @@ function App() {
             {timeline.map(event => (
               <div className="timeline-item" key={event.id}>
                 <div className="timeline-dot"></div>
-                <div className="timeline-card">
-                  <strong>{event.title}</strong>
-                  <div className="timeline-time">{new Date(event.event_time).toLocaleString()}</div>
-                  <p>{event.description}</p>
-                </div>
+                {editingId === event.id ? (
+                  <div className="timeline-card">
+                    <input value={editTitle} onChange={e => setEditTitle(e.target.value)} />
+                    <input type="datetime-local" value={editTime} onChange={e => setEditTime(e.target.value)} />
+                    <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} />
+                    <button onClick={() => saveEdit(event.id)}>✅ Save</button>
+                    <button onClick={() => setEditingId(null)}>❌ Cancel</button>
+                  </div>
+                ) : (
+                  <div className="timeline-card">
+                    <strong>{event.title}</strong>
+                    <div className="timeline-time">{new Date(event.event_time).toLocaleString()}</div>
+                    <p>{event.description}</p>
+                    <button onClick={() => {
+                      setEditingId(event.id);
+                      setEditTitle(event.title);
+                      setEditDesc(event.description);
+                      setEditTime(new Date(event.event_time).toISOString().slice(0, 16));
+                    }}>✏️ Edit</button>
+                    <button onClick={() => deleteTimelineEvent(event.id)}>🗑️ Delete</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
