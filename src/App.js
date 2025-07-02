@@ -141,72 +141,49 @@ function App() {
 
     rec.onresult = async (e) => {
       const transcript = e.results[0][0].transcript.trim();
-      console.log("🎤 Full transcript:", transcript);
+      console.log("🎤 Transcript:", transcript);
 
       // 1) Extract + summary
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      const extractRes = await fetch(`${API}/extract`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` })
-        },
-        body: JSON.stringify({ transcript })
-      });
+      const extractRes = await fetch(`${API}/extract`, { /*…*/ });
       const { symptom, dismissal, action, summary } = await extractRes.json();
-      setSymptom(symptom); setDismissal(dismissal); setAction(action);
-      setSummary(summary);
+      setSymptom(symptom); setDismissal(dismissal); setAction(action); setSummary(summary);
 
-      // 2) Ask the AI: should we add this?
+      // 2) Classify via AI
+      console.log("🔍 Asking AI if we should log this…");
       const classifyRes = await fetch(`${API}/classify-timeline`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` })
-        },
+        headers: { 'Content-Type':'application/json', ...(token && {Authorization:`Bearer ${token}`}) },
         body: JSON.stringify({ transcript, summary })
       });
       const { addToTimeline } = await classifyRes.json();
+      console.log("🤖 AI addToTimeline:", addToTimeline);
 
-      // 3) Only if AI says “yes”
       if (addToTimeline) {
-        // 3a) Generate a title
-        const titleRes = await fetch(`${API}/timeline/title`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { Authorization: `Bearer ${token}` })
-          },
-          body: JSON.stringify({ transcript, summary })
-        });
+        console.log("🕒 AI decided to log this event → generating title…");
+        // generate title
+        const titleRes = await fetch(`${API}/timeline/title`, { /*…*/ });
         const { title } = await titleRes.json();
+        console.log("✏️ Title from AI:", title);
 
-        // 3b) Insert the event
-        const insertRes = await fetch(`${API}/timeline`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { Authorization: `Bearer ${token}` })
-          },
-          body: JSON.stringify({
-            title,
-            description: summary,
-            transcript
-          })
-        });
+        // insert into timeline
+        const insertRes = await fetch(`${API}/timeline`, { /*…*/ });
         const insertJson = await insertRes.json();
         if (insertRes.ok && insertJson.success) {
+          console.log("✅ Timeline event created via AI trigger:", insertJson.id);
           setVoiceTimelineMsg(`✅ Event added: "${title}"`);
           await fetchTimeline();
         } else {
-          throw new Error(insertJson.error || 'Insert failed');
+          console.error("❌ Insert failed:", insertJson);
+          setVoiceTimelineMsg(`❌ Insert failed: ${insertJson.error}`);
         }
       } else {
-        setVoiceTimelineMsg('ℹ️ AI decided not to log this to timeline.');
+        console.log("ℹ️ AI decided NOT to log.");
+        setVoiceTimelineMsg('ℹ️ AI decided not to log this event.');
       }
 
-      // 4) Finally, generate the story as normal
+      // 3) Always generate story
       handleSubmit(symptom, dismissal);
       setListening(false);
     };
@@ -214,6 +191,7 @@ function App() {
     rec.onerror = () => setListening(false);
     rec.start();
   };
+
 
   // Add a new timeline event
   const addTimelineEvent = async () => {
