@@ -140,51 +140,55 @@ function App() {
       const fullTranscript = event.results[0][0].transcript;
       console.log("🎤 Full transcript:", fullTranscript);
 
-      const lowerTranscript = fullTranscript.toLowerCase();
-      // Check for timeline trigger
-      const shouldAddToTimeline = /add (this|that|it)? ?to (my )?timeline/.test(lowerTranscript);
-
       try {
         const { data } = await supabase.auth.getSession();
-        const accessToken = data?.session?.access_token;
+        const token = data?.session?.access_token;
 
         // Run structured extraction
         const res = await fetch('https://sasi-toolkit.onrender.com/extract', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
+            ...(token && { 'Authorization': `Bearer ${token}` })
           },
           body: JSON.stringify({ transcript: fullTranscript })
         });
 
         const dataRes = await res.json();
 
-
         setSymptom(dataRes.symptom || '');
         setDismissal(dataRes.dismissal || '');
         setAction(dataRes.action || '');
-
-        // display the transcript summary in its own field
         setSummary(dataRes.summary || '');
 
         // Auto-run story generation
         handleSubmit(dataRes.symptom, dataRes.dismissal);
 
-        // ✅ If "add to timeline" phrase is detected
-        if (shouldAddToTimeline) {
-          await fetch('https://sasi-toolkit.onrender.com/timeline', {
+        // 2️⃣ AI‐powered timeline trigger
+        const classifyRes = await fetch(`${API}/classify-timeline`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` })
+          },
+          body: JSON.stringify({ transcript: fullTranscript, summary: dataRes.summary })
+        });
+        const { addToTimeline } = await classifyRes.json();
+        if (addToTimeline) {
+          await fetch(`${API}/timeline`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
+              ...(token && { 'Authorization': `Bearer ${token}` })
             },
             body: JSON.stringify({
               title: 'Voice Log',
               description: fullTranscript
             })
           });
-          console.log("🕒 Timeline event created via voice.");
+          console.log("🕒 Timeline event created via AI trigger.");
+        } else {
+          console.log("ℹ️ AI decided not to log this event.");
         }
 
         console.log("✅ Received structured data from backend:", dataRes);

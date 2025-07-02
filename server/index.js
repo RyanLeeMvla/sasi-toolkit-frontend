@@ -224,6 +224,36 @@ app.post('/transcribe', authenticateJWT, upload.single('audio'), async (req, res
   }
 });
 
+// POST /classify-timeline
+app.post('/classify-timeline', authenticateJWT, async (req, res) => {
+  const { transcript, summary } = req.body;
+  try {
+    const classification = await openai.chat.completions.create({
+      model: "gpt-4",
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content: `You are a smart assistant that decides if a patient's spoken statement should be recorded as a timeline event. 
+Return exactly JSON with a single boolean key "addToTimeline". 
+Do NOT wrap it in markdown or text.`
+        },
+        {
+          role: "user",
+          content: `Transcript: "${transcript}"\nSummary: "${summary}"`
+        }
+      ]
+    });
+
+    const json = JSON.parse(classification.choices[0].message.content.trim());
+    return res.json(json);
+  } catch (err) {
+    console.error("❌ /classify-timeline error", err);
+    return res.status(500).json({ addToTimeline: false });
+  }
+});
+
+
 // 🧠 Route: Generate story using OpenAI
 app.post('/generate', authenticateJWT, async (req, res) => {
   const { symptom, dismissal, timeline } = req.body;
