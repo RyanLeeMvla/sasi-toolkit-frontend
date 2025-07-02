@@ -6,6 +6,9 @@ import io from 'socket.io-client';
 import supabase from './supabaseClient';
 import Login from './Login';
 
+// Central API base URL for all backend requests
+const API = 'https://sasi-toolkit.onrender.com';
+
 // ✅ Point to Render backend (adjust this if you set up an environment variable later)
 const socket = io('https://sasi-toolkit.onrender.com');
 
