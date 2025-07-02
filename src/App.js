@@ -172,7 +172,7 @@ function App() {
         body: JSON.stringify({
           transcript,
           summary,
-          systemPrompt: `Return { addToTimeline: true } only if the user explicitly asks (in any wording) to add or log this event to their timeline. For example, the phrase "Add this to timeline," but doesn't need to be hardcoded. Otherwise return { addToTimeline: false }.`
+          systemPrompt: `Return { addToTimeline: true } only if the user explicitly asks (in any wording) to add or log this event to their timeline. For example, the phrase "Add this to timeline," would provoke a true. Otherwise return { addToTimeline: false }.`
         })
       });
       const { addToTimeline } = await classifyRes.json();
@@ -181,12 +181,33 @@ function App() {
       if (addToTimeline) {
         console.log("🕒 AI decided to log this event → generating title…");
         // generate title
-        const titleRes = await fetch(`${API}/timeline/title`, { /*…*/ });
+        const titleRes = await fetch(`${API}/timeline/title`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken && { Authorization: `Bearer ${accessToken}` })
+          },
+          body: JSON.stringify({
+            transcript: fullTranscript,
+            summary: summary    // the summary you got back from /extract
+          })
+        });
         const { title } = await titleRes.json();
         console.log("✏️ Title from AI:", title);
 
         // insert into timeline
-        const insertRes = await fetch(`${API}/timeline`, { /*…*/ });
+        const insertRes = await fetch(`${API}/timeline`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken && { Authorization: `Bearer ${accessToken}` })
+          },
+          body: JSON.stringify({
+            title,                      // the AI-generated title
+            description: summary,       // use the summary as the card text
+            transcript: fullTranscript  // store the raw transcript too
+          })
+        });
         const insertJson = await insertRes.json();
         if (insertRes.ok && insertJson.success) {
           console.log("✅ Timeline event created via AI trigger:", insertJson.id);
