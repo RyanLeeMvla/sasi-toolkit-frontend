@@ -99,10 +99,7 @@ function App() {
     const result = await res.json();
 
     if (result.success) {
-      await fetchTimeline();
-      setNewTitle('');
-      setNewDesc('');
-      setNewTime(new Date().toISOString().slice(0, 16));
+      window.location.reload(); // ✅ Force full page reload
     }
   };
 
