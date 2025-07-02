@@ -34,6 +34,14 @@ function App() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user);
     });
+    const socket = io('https://sasi-toolkit.onrender.com');
+    socket.on('transcription_result', data => {
+      setSymptom(data.symptom);
+      setDismissal(data.dismissal);
+      setAction(data.action);
+      handleSubmit(data.symptom, data.dismissal);
+    });
+    return () => socket.disconnect();
   }, []);
 
   if (!user) return <Login setUser={setUser} />;

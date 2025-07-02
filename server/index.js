@@ -146,61 +146,38 @@ app.post('/extract', async (req, res) => {
   }
 });
 
-app.post('/transcribe', upload.single('audio'), async (req, res) => {
+app.post('/transcribe', authenticateJWT, upload.single('audio'), async (req, res) => {
   try {
-    const audioPath = req.file.path;
-
-    console.log("📥 Received audio file:");
-    console.log(`🧾 Filename: ${req.file.originalname}`);
-    console.log(`📁 Saved as: ${req.file.path}`);
-
-    try {
-      const { execSync } = require('child_process');
-      const result = execSync(`ffprobe -v error -show_format -show_streams ${audioPath}`);
-      console.log("🎵 ffprobe output:\n" + result.toString());
-    } catch (ffErr) {
-      console.error("❌ ffprobe failed:", ffErr.message);
-    }
-
-    const transcription = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(audioPath),
-      model: 'whisper-1',
-      response_format: 'json'
-    });
-    console.log("🎙️ Whisper transcription complete:");
-    console.log(transcription.text);
-
-    console.log("📝 Transcript:", transcription.text);
-
-    // Pipe result to existing /extract logic
-    const FormData = require('form-data');
-    const form = new FormData();
-    form.append('file', fs.createReadStream(audioPath), {
-      filename: 'rec.wav', // force correct filename
-      contentType: 'audio/wav', // force MIME type
+    // 1. Whisper transcription
+    const { text } = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(req.file.path),
+      model: 'whisper-1'
     });
 
-    // Send form to /extract
-    const extractRes = await fetch(`https://sasi-toolkit.onrender.com/extract`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(req.headers.authorization && { 'Authorization': req.headers.authorization })
-      },
-      body: JSON.stringify({ transcript: transcription.text })
-    });
+    // 2. GPT-4 extraction
+    const parsed = JSON.parse((await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: 'Return JSON with keys symptom, dismissal, action.' },
+        { role: 'user', content: text }
+      ]
+    })).choices[0].message.content);
 
-    console.log("🔁 Sent transcript to /extract for parsing.");
+    // 3. Save to Supabase
+    await supabase.from('Sasi-toolkit').insert([
+      {
+        transcript: text,
+        ...parsed,
+        user_id: req.user_id
+      }
+    ]);
 
-    const parsed = await extractRes.json();
-    fs.unlinkSync(audioPath); // clean up temp file
-
-    console.log("✅ Final parsed JSON to send:");
-    console.log(parsed);
-    res.json(parsed);
+    // 4. Emit to frontend
+    io.emit('transcription_result', { transcript: text, ...parsed });
+    res.json({ transcript: text, ...parsed });
   } catch (err) {
-    console.error("❌ Error in /transcribe:", err);
-    res.status(500).json({ error: "Transcription failed" });
+    console.error('❌ Error in /transcribe:', err);
+    res.status(500).json({ error: 'Transcription failed' });
   }
 });
 
