@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './ToolkitStyle.css';
 import ProgressBar from './ProgressBar';
 import io from 'socket.io-client';
@@ -64,20 +64,20 @@ function App() {
     };
   }, []);
 
-  // Fetch timeline helper
-  const fetchTimeline = async () => {
+  // Fetch timeline helper (useCallback for stable reference)
+  const fetchTimeline = useCallback(async () => {
     const { data, error } = await supabase
       .from('timeline_events')
       .select('*');
-    if (!error) {
+    if (!error && data) {
       const sorted = [...data].sort((a, b) => new Date(a.event_time) - new Date(b.event_time));
       setTimeline(sorted);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (user) fetchTimeline();
-  }, [user]);
+  }, [user, fetchTimeline]);
 
   const addTimelineEvent = async () => {
     const { data: sessionData } = await supabase.auth.getSession();
