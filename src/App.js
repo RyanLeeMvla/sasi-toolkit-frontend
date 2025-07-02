@@ -111,15 +111,17 @@ function App() {
   }, [user, fetchTimeline]);
 
   // Timeline save edit (state-based refresh)
-  const saveEdit = async (id) => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
+const saveEdit = async (id) => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Not authenticated');
 
-    await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
+    const res = await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        Authorization: `Bearer ${token}`
       },
       body: JSON.stringify({
         title: editTitle,
@@ -128,28 +130,50 @@ function App() {
       })
     });
 
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      console.error('PUT failed:', json);
+      throw new Error(json.error || 'Unknown error');
+    }
+
     setEditingId(null);
-    setEditTitle('');
-    setEditDesc('');
-    setEditTime('');
     await fetchTimeline();
-  };
+  } catch (err) {
+    console.error('Error saving edit:', err);
+    alert(`Save failed: ${err.message}`);
+  }
+};
 
   // Timeline delete (state-based refresh)
-  const deleteTimelineEvent = async (id) => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
+const deleteTimelineEvent = async (id) => {
+  if (!window.confirm('Are you sure you want to delete this event?')) return;
 
-    await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
+  try {
+    // 1. get the token
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Not authenticated');
+
+    // 2. call the DELETE endpoint
+    const res = await fetch(`https://sasi-toolkit.onrender.com/timeline/${id}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: { Authorization: `Bearer ${token}` }
     });
 
-    setEditingId(null);
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      console.error('DELETE failed:', json);
+      throw new Error(json.error || 'Unknown error');
+    }
+
+    // 3. refresh your list
     await fetchTimeline();
-  };
+  } catch (err) {
+    console.error('Error deleting event:', err);
+    alert(`Delete failed: ${err.message}`);
+  }
+};
+
 
   if (!user) return <Login setUser={setUser} />;
 
