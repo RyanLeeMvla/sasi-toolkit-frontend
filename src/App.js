@@ -29,6 +29,11 @@ function App() {
   const [editDesc, setEditDesc] = useState('');
   const [editTime, setEditTime] = useState('');
 
+  // Expose supabase client for debugging
+  useEffect(() => {
+    window.supabase = supabase;
+  }, []);
+
   // Add a new timeline event
   const addTimelineEvent = async () => {
     const { data: sessionData } = await supabase.auth.getSession();
