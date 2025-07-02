@@ -74,7 +74,7 @@ function App() {
   // --- Move all helper functions above useEffect hooks ---
 
   // 1️⃣ Define handleSubmit before any helper that calls it
-  const handleSubmit = async (customSymptom, customDismissal) => {
+  const handleSubmit = useCallback(async (customSymptom, customDismissal) => {
     const usedSymptom = customSymptom !== undefined ? customSymptom : symptom;
     const usedDismissal = customDismissal !== undefined ? customDismissal : dismissal;
 
@@ -126,7 +126,7 @@ function App() {
       setIsLoading(false);
       setResponse('Error: ' + err.message);
     }
-  };
+  }, [symptom, dismissal, timeline]);
 
   // 2️⃣ Now define handleFullVoiceInput after handleSubmit
   const handleFullVoiceInput = async () => {
@@ -345,9 +345,9 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (user) fetchTimeline();
-  }, [user, fetchTimeline]);
+useEffect(() => {
+  if (user) fetchTimeline();
+}, [user, fetchTimeline, handleSubmit]);
 
 
 
