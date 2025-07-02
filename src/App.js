@@ -271,6 +271,12 @@ const deleteTimelineEvent = async (id) => {
     const usedSymptom = customSymptom !== undefined ? customSymptom : symptom;
     const usedDismissal = customDismissal !== undefined ? customDismissal : dismissal;
 
+    // 1️⃣ Pull in the timeline events as context
+    const { data: timelineEvents } = await supabase
+      .from('timeline_events')
+      .select('title,description,event_time')
+      .order('event_time', { ascending: true });
+
     setIsLoading(true);
     setResponse('Generating story…');
     setProgress(0);
@@ -294,7 +300,11 @@ const deleteTimelineEvent = async (id) => {
           'Content-Type': 'application/json',
           ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
         },
-        body: JSON.stringify({ symptom: usedSymptom, dismissal: usedDismissal })
+        body: JSON.stringify({
+          symptom: usedSymptom,
+          dismissal: usedDismissal,
+          timeline: timelineEvents
+        })
       });
 
       const dataRes = await res.json();

@@ -225,9 +225,14 @@ app.post('/transcribe', authenticateJWT, upload.single('audio'), async (req, res
 });
 
 // 🧠 Route: Generate story using OpenAI
-app.post('/generate', async (req, res) => {
-  const { symptom, dismissal } = req.body;
+app.post('/generate', authenticateJWT, async (req, res) => {
+  const { symptom, dismissal, timeline } = req.body;
   const user_id = req.user_id;
+
+  // 2️⃣ Build a human-readable summary of the timeline
+  const timelineText = (timeline || [])
+    .map(ev => `• [${new Date(ev.event_time).toLocaleString()}] ${ev.title}: ${ev.description}`)
+    .join('\n') || 'No prior events.';
 
   try {
     // Generate the AI response
@@ -236,24 +241,26 @@ app.post('/generate', async (req, res) => {
       messages: [
         {
           role: "system",
-          content: "You are a healthcare advocate helping patients respond to dismissal."
+          content:
+            `The patient has the following past medical events:\n${timelineText}\n\n` +
+            "You are a healthcare advocate helping patients respond to dismissal.\n" +
+            "As a healthcare advocate, generate a professional, respectful, and assertive response that the patient can say in return. Write in the first person, and pretend that you are the patient. Pretend that this issue means the world to you.\n" +
+            "The response should:\n" +
+            "- Reference real, legally binding policies such as:\n" +
+            "  • Affordable Care Act (42 U.S.C. § 18001): Expands access to insurance, bans denial for preexisting conditions, and mandates coverage for services like preventive care and mental health.\n" +
+            "• HIPAA (45 CFR § 164.524): Grants patients the right to access and review their medical records, promoting transparency and continuity of care.\n" +
+            "• Civil Rights Act (42 U.S.C. § 2000d): Prohibits discrimination in federally funded healthcare—supports equitable treatment and language access.\n" +
+            "• Parity Law (29 U.S.C. § 1185a): Requires equal coverage for mental health and addiction treatment as for physical conditions.\n" +
+            "• Joint Commission Standards: Accreditation guidelines for healthcare facilities, covering patient safety, infection control, and quality of care.\n" +
+            "- Be at least 4 sentences long.\n" +
+            "- Use direct, educated language that builds trust but firmly requests care.\n" +
+            "- Address the patient's specific symptom and the doctor's dismissal, include word for word.\n" +
+            "- Include at least one legal citation using its actual law code or regulation number in \"quotes\".\n" +
+            "Do not apologize or minimize the patient’s concerns. Use first-person language (e.g., \"I appreciate\", \"I understand\", \"I request\")."
         },
         {
           role: "user",
-          content: `A patient is experiencing "${symptom}", and the doctor said "${dismissal}". 
-As a healthcare advocate, generate a professional, respectful, and assertive response that the patient can say in return. Write in the first person, and pretend that you are the patient. Pretend that this issue means the world to you.
-The response should:
-- Reference real, legally binding policies such as:
-  • Affordable Care Act (42 U.S.C. § 18001): Expands access to insurance, bans denial for preexisting conditions, and mandates coverage for services like preventive care and mental health.
-• HIPAA (45 CFR § 164.524): Grants patients the right to access and review their medical records, promoting transparency and continuity of care.
-• Civil Rights Act (42 U.S.C. § 2000d): Prohibits discrimination in federally funded healthcare—supports equitable treatment and language access.
-• Parity Law (29 U.S.C. § 1185a): Requires equal coverage for mental health and addiction treatment as for physical conditions.
-• Joint Commission Standards: Accreditation guidelines for healthcare facilities, covering patient safety, infection control, and quality of care.
-- Be at least 4 sentences long.
-- Use direct, educated language that builds trust but firmly requests care.
-- Adress the patient's specific symptom and the doctor's dismissal, include word for word.
-- Include at least one legal citation using its actual law code or regulation number in "quotes".
-Do not apologize or minimize the patient’s concerns. Use first-person language (e.g., "I appreciate", "I understand", "I request").`
+          content: `Symptom: "${symptom}"\nDoctor said: "${dismissal}".`
         }
       ]
     });
