@@ -474,52 +474,53 @@ function App() {
           <hr />
 
           <h2>Your Timeline</h2>
-          <div className="timeline-container">
-            <div className="timeline-line"></div>
-            {timeline.map(event => (
-              <div className="timeline-item" key={event.id}>
-                <div className="timeline-dot"></div>
-                {editingId === event.id ? (
-                  <div className="timeline-card">
-                    <input
-                      type="text"
-                      value={editTitle}
-                      onChange={e => setEditTitle(e.target.value)}
-                    />
-                    <input
-                      type="datetime-local"
-                      value={editTime}
-                      onChange={e => setEditTime(e.target.value)}
-                    />
-                    <textarea
-                      value={editDesc}
-                      onChange={e => setEditDesc(e.target.value)}
-                    />
-                    <div className="button-group">
-                      <button onClick={() => saveEdit(event.id)}>✅ Save</button>
-                      <button onClick={() => setEditingId(null)}>❌ Cancel</button>
+          <div className="timeline-scroll">
+            <div className="timeline-track">
+              {timeline.map(event => (
+                <div className="timeline-item" key={event.id}>
+                  <div className="timeline-dot"></div>
+                  {editingId === event.id ? (
+                    <div className="timeline-card">
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                      />
+                      <input
+                        type="datetime-local"
+                        value={editTime}
+                        onChange={e => setEditTime(e.target.value)}
+                      />
+                      <textarea
+                        value={editDesc}
+                        onChange={e => setEditDesc(e.target.value)}
+                      />
+                      <div className="button-group">
+                        <button onClick={() => saveEdit(event.id)}>✅ Save</button>
+                        <button onClick={() => setEditingId(null)}>❌ Cancel</button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="timeline-card">
-                    <strong>{event.title}</strong>
-                    <div className="timeline-time">
-                      {new Date(event.event_time).toLocaleString()}
+                  ) : (
+                    <div className="timeline-card">
+                      <strong>{event.title}</strong>
+                      <div className="timeline-time">
+                        {new Date(event.event_time).toLocaleString()}
+                      </div>
+                      <p>{event.description}</p>
+                      <div className="button-group">
+                        <button onClick={() => {
+                          setEditingId(event.id);
+                          setEditTitle(event.title);
+                          setEditDesc(event.description);
+                          setEditTime(new Date(event.event_time).toISOString().slice(0,16));
+                        }}>✏️ Edit</button>
+                        <button onClick={() => deleteTimelineEvent(event.id)}>🗑️ Delete</button>
+                      </div>
                     </div>
-                    <p>{event.description}</p>
-                    <div className="button-group">
-                      <button onClick={() => {
-                        setEditingId(event.id);
-                        setEditTitle(event.title);
-                        setEditDesc(event.description);
-                        setEditTime(new Date(event.event_time).toISOString().slice(0,16));
-                      }}>✏️ Edit</button>
-                      <button onClick={() => deleteTimelineEvent(event.id)}>🗑️ Delete</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

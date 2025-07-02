@@ -171,36 +171,40 @@ body {
 }
 
 
-/* Container becomes flex so items line up on the same row */
-.timeline-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  padding: 2rem 0;     /* extra top/bottom space */
+/* 1) scroll wrapper */
+.timeline-scroll {
   overflow-x: auto;
-  margin: 0 -1.5rem;   /* pull items to full width */
+  /* optional: hide scrollbar, padding, etc */
 }
 
-/* The “rail” under all cards */
+/* 2) full-width track */
+.timeline-track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 2rem 1rem; /* same as before */
+}
+
+/* 3) the rail now spans the track’s width */
 .timeline-line {
   position: absolute;
   top: 50%;
   left: 0;
-  width: 100%;
+  width: 100%;   /* now full track width! */
   height: 2px;
   background: #ccc;
   z-index: 1;
 }
 
-/* Each card sits at its own flex position */
+/* 4) items unchanged */
 .timeline-item {
   position: relative;
   flex: 0 0 auto;
-  width: 250px;          /* or your desired width */
-  margin: 0 1.5rem;      /* spacing between cards */
+  width: 250px;
+  margin: 0 1.5rem;
 }
 
-/* The dot sits exactly in the middle of the card on the rail */
+/* dot and card as before */
 .timeline-dot {
   position: absolute;
   top: 50%;
@@ -213,7 +217,6 @@ body {
   z-index: 2;
 }
 
-/* Card styling stays mostly the same */
 .timeline-card {
   margin-top: 1.5rem;    /* push the card below the rail */
   background: #fff;
