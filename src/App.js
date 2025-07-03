@@ -42,12 +42,12 @@ function App() {
   // PDF Exporter for Timeline (after timeline state is declared)
   const exportTimelineAsPDF = () => {
     if (!timeline.length) return alert('No events to export.');
-    
+
     const doc = new jsPDF();
     doc.setFont("times", "normal");
     doc.setFontSize(22);
-    doc.text('� Patient Timeline Report', 14, 20);
-    
+    doc.text('📋 Patient Timeline Report', 14, 20);
+
     doc.setFontSize(12);
     doc.setTextColor(100);
     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
@@ -59,7 +59,8 @@ function App() {
       e.description
     ]);
 
-    doc.autoTable({
+    // Use autoTable from the imported autoTable, not from doc
+    autoTable(doc, {
       head,
       body,
       startY: 35,
