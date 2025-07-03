@@ -41,32 +41,44 @@ function App() {
 
   // PDF Exporter for Timeline (after timeline state is declared)
   const exportTimelineAsPDF = () => {
-    if (!timeline.length) {
-      alert('No events to export.');
-      return;
-    }
-
+    if (!timeline.length) return alert('No events to export.');
+    
     const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text('🗓️ Patient Timeline', 14, 22);
+    doc.setFont("times", "normal");
+    doc.setFontSize(22);
+    doc.text('� Patient Timeline Report', 14, 20);
+    
+    doc.setFontSize(12);
+    doc.setTextColor(100);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
 
     const head = [['Date', 'Title', 'Description']];
     const body = timeline.map(e => [
       new Date(e.event_time).toLocaleString(),
-      e.title,
+      e.title.replaceAll('"', ''),
       e.description
     ]);
 
-    autoTable(doc, {
+    doc.autoTable({
       head,
       body,
-      startY: 30,
-      styles: { cellWidth: 'wrap' },
-      headStyles: { fillColor: [41, 128, 185] },
+      startY: 35,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [33, 37, 41],
+        textColor: 255,
+        fontStyle: 'bold'
+      },
+      styles: {
+        fontSize: 11,
+        cellPadding: 4,
+        overflow: 'linebreak',
+        valign: 'top'
+      },
       margin: { left: 14, right: 14 }
     });
 
-    doc.save('timeline.pdf');
+    doc.save('patient_timeline_report.pdf');
   };
 
 
@@ -516,7 +528,7 @@ useEffect(() => {
           />
           <button className="generate" onClick={addTimelineEvent}>➕ Add to Timeline</button>
 
-          <button onClick={exportTimelineAsPDF}>📄 Download PDF</button>
+          <button className="download-btn" onClick={exportTimelineAsPDF}>📄 Download PDF</button>
 
           {voiceTimelineMsg && (
             <div style={{margin:'1rem 0', color:'#2d7'}}> {voiceTimelineMsg} </div>
