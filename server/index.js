@@ -260,31 +260,79 @@ app.post('/transcribe', authenticateJWT, upload.single('audio'), async (req, res
 // POST /classify-timeline
 app.post('/classify-timeline', authenticateJWT, async (req, res) => {
   const { transcript, summary } = req.body;
+
+  const messages = [
+    {
+      role: "system",
+      content: `
+You are a timeline-logging assistant. Your job is to:
+
+1. Determine if the patient explicitly asks to log this to their timeline using clear phrases like:
+   - "please add this to my timeline"
+   - "log this event"
+   - "record this"
+   - "save this for me"
+   - or other clear timeline commands.
+
+2. Respond with a JSON object like this:
+{
+  "addToTimeline": true,
+  "reason": "The user said 'please add this to my timeline'."
+}
+
+Or if no such request is present, respond with:
+{
+  "addToTimeline": false,
+  "reason": "No timeline logging language was detected."
+}
+
+Be STRICT — only say true if it's clearly asked.
+`
+    },
+    // Few-shot examples
+    {
+      role: "user",
+      content: `Transcript: "I felt dizzy this morning, please add this to my timeline."`
+    },
+    {
+      role: "assistant",
+      content: `{ "addToTimeline": true, "reason": "Explicitly asked to add to timeline." }`
+    },
+    {
+      role: "user",
+      content: `Transcript: "I went for a walk and my doctor said I'm healthy."`
+    },
+    {
+      role: "assistant",
+      content: `{ "addToTimeline": false, "reason": "No request to log the event." }`
+    },
+    // Real input
+    {
+      role: "user",
+      content: `Transcript: "${transcript}"\nSummary: "${summary}"`
+    }
+  ];
+
+  console.log("🧠 Prompt sent to AI:", messages);
+
   try {
-    const classification = await openai.chat.completions.create({
+    const completion = await openai.chat.completions.create({
       model: "gpt-4",
       temperature: 0,
-      messages: [
-        {
-          role: "system",
-          content: `You are a smart assistant that decides if a patient's spoken statement should be recorded as a timeline event. 
-Return exactly JSON with a single boolean key "addToTimeline". 
-Do NOT wrap it in markdown or text.`
-        },
-        {
-          role: "user",
-          content: `Transcript: "${transcript}"\nSummary: "${summary}"`
-        }
-      ]
+      messages
     });
 
-    const json = JSON.parse(classification.choices[0].message.content.trim());
+    const responseText = completion.choices[0].message.content.trim();
+    console.log("🤖 Classification response:", responseText);
+
+    const json = JSON.parse(responseText);
     return res.json(json);
   } catch (err) {
-    console.error("❌ /classify-timeline error", err);
-    return res.status(500).json({ addToTimeline: false });
+    console.error("/classify-timeline error", err);
+    return res.status(500).json({ addToTimeline: false, reason: "Internal server error." });
   }
 });
+
 
 
 // 🧠 Route: Generate story using OpenAI

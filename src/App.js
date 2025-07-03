@@ -187,8 +187,9 @@ NEVER guess or assume. NEVER infer. Only respond TRUE when the user **asks to lo
 ALWAYS return a single-line raw JSON object with no extra formatting.`
         })
       });
-      const { addToTimeline } = await classifyRes.json();
-      console.log("🤖 AI addToTimeline:", addToTimeline);
+
+      const { addToTimeline, reason } = await classifyRes.json();
+      console.log("🤖 AI addToTimeline:", addToTimeline, "| Reason:", reason);
 
       // Use correct variables for accessToken and fullTranscript
       const accessToken = token;
@@ -227,15 +228,15 @@ ALWAYS return a single-line raw JSON object with no extra formatting.`
         const insertJson = await insertRes.json();
         if (insertRes.ok && insertJson.success) {
           console.log("✅ Timeline event created via AI trigger:", insertJson.id);
-          setVoiceTimelineMsg(`✅ Event added: "${title}"`);
+          setVoiceTimelineMsg(`✅ Event added: "${title}"\n🤖 Reason: ${reason}`);
           await fetchTimeline();
         } else {
           console.error("❌ Insert failed:", insertJson);
           setVoiceTimelineMsg(`❌ Insert failed: ${insertJson.error}`);
         }
       } else {
-        console.log("ℹ️ AI decided NOT to log.");
-        setVoiceTimelineMsg('ℹ️ AI decided not to log this event.');
+        console.log("ℹ️ AI decided NOT to log. Reason:", reason);
+        setVoiceTimelineMsg(`ℹ️ AI did not log this event.\n🤖 Reason: ${reason}`);
       }
 
       // 3) Always generate story
