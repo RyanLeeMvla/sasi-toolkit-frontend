@@ -172,12 +172,19 @@ function App() {
         body: JSON.stringify({
           transcript,
           summary,
-          systemPrompt: `You are a timeline-logging assistant.  Return EXACTLY:
+          systemPrompt: `You are a patient timeline-logging assistant.
+
+Your ONLY job is to return:
   { "addToTimeline": true }
-only when the patient explicitly requests or commands to record this event in their timeline, using phrases like "add this to my timeline", "log this event", "please save this", etc.  
-Otherwise return:
+
+—but ONLY if the user says something like:
+  "add this to my timeline", "please save this", "log this", "remember this", etc.
+
+If the user just describes a medical event, but does NOT ask to log it, return:
   { "addToTimeline": false }
-Do NOT include any other text or formatting. If the user does not explicitly ask to log this, return false.`
+
+NEVER guess or assume. NEVER infer. Only respond TRUE when the user **asks to log** the event.
+ALWAYS return a single-line raw JSON object with no extra formatting.`
         })
       });
       const { addToTimeline } = await classifyRes.json();
