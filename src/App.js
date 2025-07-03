@@ -172,7 +172,12 @@ function App() {
         body: JSON.stringify({
           transcript,
           summary,
-          systemPrompt: `Return { addToTimeline: true } only if the user explicitly asks (in any wording) to add or log this event to their timeline. For example, the phrase "Add this to timeline," would provoke a true. Otherwise return { addToTimeline: false }.`
+          systemPrompt: `You are a timeline-logging assistant.  Return EXACTLY:
+  { "addToTimeline": true }
+only when the patient explicitly requests or commands to record this event in their timeline, using phrases like "add this to my timeline", "log this event", "please save this", etc.  
+Otherwise return:
+  { "addToTimeline": false }
+Do NOT include any other text or formatting. If the user does not explicitly ask to log this, return false.`
         })
       });
       const { addToTimeline } = await classifyRes.json();
