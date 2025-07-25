@@ -1,0 +1,52 @@
+#include <WiFi.h>
+#include <WiFiMulti.h>
+#include <HTTPClient.h>
+
+const char* ssid     = "Sasi";
+const char* password = "toolkitt";
+const char* triggerURL = "https://sasi-toolkit.onrender.com/trigger-button";
+
+WiFiMulti wifiMulti;
+const int buttonPin = 4
+bool lastButtonState = HIGH;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(buttonPin, INPUT_PULLUP);
+
+  WiFi.mode(WIFI_STA);
+  wifiMulti.addAP(ssid, password);
+
+  Serial.print("🔌 Connecting to Wi-Fi");
+  // wifiMulti.run() returns WL_CONNECTED when joined
+  while (wifiMulti.run() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println(" ✅ Connected!");
+}
+
+void loop() {
+  bool currentButtonState = digitalRead(buttonPin);
+  if (lastButtonState == HIGH && currentButtonState == LOW) {
+    Serial.println("🟢 Button pressed. Sending POST request...");
+    sendTriggerRequest();
+  }
+  lastButtonState = currentButtonState;
+  delay(50);
+}
+
+void sendTriggerRequest() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(triggerURL);
+    http.addHeader("Content-Type", "application/json");
+    int code = http.POST("{}");
+    if (code > 0) Serial.printf("✅ Response: %d\n", code);
+    else        Serial.printf("❌ POST failed: %s\n", http.errorToString(code).c_str());
+    http.end();
+  } else {
+    Serial.println("❌ Lost Wi-Fi. Retrying...");
+    // let WiFiMulti re-attempt in the next loop
+  }
+}

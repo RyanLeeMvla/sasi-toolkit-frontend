@@ -1,0 +1,61 @@
+/*
+ * MAX9814 Microphone Test Sketch
+ * Simple test to verify microphone is working
+ * Connect MAX9814 OUT pin to GPIO1 (ADC1_CH0)
+ * VCC to 3.3V, GND to GND
+ */
+
+const int micPin = 1;  // MAX9814 OUT connected to GPIO1 (ADC1_CH0)
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Wait for serial connection (important for ESP32-S3)
+  while (!Serial) {
+    delay(10);
+  }
+  delay(2000);  // Give extra time for serial monitor to connect
+  
+  // Configure ADC for microphone reading
+  analogReadResolution(12);  // 12-bit resolution (0-4095)
+  analogSetAttenuation(ADC_11db);  // Full range 0-3.3V
+  
+  Serial.println("🎤 MAX9814 Microphone Test Starting...");
+  Serial.println("Speak into the microphone to see audio levels");
+  Serial.println("----------------------------------------");
+  Serial.print("Testing serial output... Raw reading: ");
+  Serial.println(analogRead(micPin));
+  
+  delay(1000);
+}
+
+void loop() {
+  // Read raw analog value
+  int rawValue = analogRead(micPin);
+  
+  // Convert to voltage (0-3.3V)
+  float voltage = (rawValue * 3.3) / 4095.0;
+  
+  // Calculate audio level (distance from center)
+  int centered = abs(rawValue - 2048);  // Center around 2048 (middle of 0-4095)
+  
+  // Create simple visual level meter
+  String levelBar = "";
+  int barLength = centered / 100;  // Scale down for display
+  
+  for (int i = 0; i < min(barLength, 40); i++) {
+    levelBar += "█";
+  }
+  
+  // Print readings every 100ms
+  Serial.print("Raw: ");
+  Serial.print(rawValue);
+  Serial.print(" | Voltage: ");
+  Serial.print(voltage, 2);
+  Serial.print("V | Level: ");
+  Serial.print(centered);
+  Serial.print(" | ");
+  Serial.println(levelBar);
+  
+  delay(100);
+}
