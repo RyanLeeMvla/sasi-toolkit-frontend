@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ToolkitStyle.css';
 import ProgressBar from './ProgressBar';
 import io from 'socket.io-client';
@@ -7,12 +7,18 @@ import supabase from './supabaseClient';
 import Login from './Login';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import AudioService from './AudioService';
 
 // Central API base URL for all backend requests
-const API = 'https://sasi-toolkit.onrender.com';
+const API = process.env.NODE_ENV === 'development' 
+  ? 'http://localhost:10000' 
+  : 'https://sasi-toolkit.onrender.com';
 
-// ✅ Point to Render backend (adjust this if you set up an environment variable later)
-const socket = io('https://sasi-toolkit.onrender.com');
+// ✅ Socket.IO connection with transport options
+const socket = io(API, {
+  transports: ['polling', 'websocket'], // Try polling first, then websocket
+  forceNew: true
+});
 
 function App() {
   // --- your existing state ---
@@ -38,6 +44,11 @@ function App() {
   
   // Voice timeline message state (must be declared with other hooks, not inside a conditional or after return)
   const [voiceTimelineMsg, setVoiceTimelineMsg] = useState("");
+  
+  // 🎤 Audio Service State
+  const audioServiceRef = useRef(null);
+  const [esp32Connected, setEsp32Connected] = useState(false);
+  const [primaryDevice, setPrimaryDevice] = useState('laptop');
 
   // PDF Exporter for Timeline (after timeline state is declared)
   const exportTimelineAsPDF = () => {
@@ -141,8 +152,24 @@ function App() {
     }
   }, [symptom, dismissal, timeline]);
 
-  // 2️⃣ Now define handleFullVoiceInput after handleSubmit
+  // 2️⃣ Enhanced voice input using AudioService (ESP32 + Laptop)
   const handleFullVoiceInput = async () => {
+    if (!audioServiceRef.current) {
+      console.error('❌ AudioService not initialized');
+      return handleBrowserVoiceInput();
+    }
+
+    try {
+      console.log('🎤 Starting enhanced voice input...');
+      await audioServiceRef.current.startRecording();
+    } catch (error) {
+      console.error('❌ Failed to start enhanced voice input:', error);
+      handleBrowserVoiceInput();
+    }
+  };
+
+  // 🎤 Fallback browser speech recognition (original method)
+  const handleBrowserVoiceInput = async () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return alert("Speech recognition not supported.");
 
@@ -154,111 +181,20 @@ function App() {
 
     rec.onresult = async (e) => {
       const transcript = e.results[0][0].transcript.trim();
-      console.log("🎤 Transcript:", transcript);
-
-      // 1) Extract + summary
-      // inside handleFullVoiceInput, before you call /extract:
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      const extractRes = await fetch(`${API}/extract`, {
-        method: 'POST',                   // ← must be POST
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` })
-        },
-        body: JSON.stringify({ transcript })
-      });
-      if (!extractRes.ok) {
-        console.error('Extract failed', await extractRes.text());
-        return;
-      }
-      const { symptom, dismissal, action, summary } = await extractRes.json();
-
-      setSymptom(symptom); setDismissal(dismissal); setAction(action); setSummary(summary);
-
-      // 2) Classify via AI
-      console.log("🔍 Asking AI if we should log this…");
-      const classifyRes = await fetch(`${API}/classify-timeline`, {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json', ...(token && {Authorization:`Bearer ${token}`}) },
-        body: JSON.stringify({
-          transcript,
-          summary,
-          systemPrompt: `You are a patient timeline-logging assistant.
-
-Your ONLY job is to return:
-  { "addToTimeline": true }
-
-—but ONLY if the user says something like:
-  "add this to my timeline", "please save this", "log this", "remember this", etc.
-
-If the user just describes a medical event, but does NOT ask to log it, return:
-  { "addToTimeline": false }
-
-NEVER guess or assume. NEVER infer. Only respond TRUE when the user **asks to log** the event.
-ALWAYS return a single-line raw JSON object with no extra formatting.`
-        })
-      });
-
-      const { addToTimeline, reason } = await classifyRes.json();
-      console.log("🤖 AI addToTimeline:", addToTimeline, "| Reason:", reason);
-
-      // Use correct variables for accessToken and fullTranscript
-      const accessToken = token;
-      const fullTranscript = transcript;
-
-      if (addToTimeline) {
-        console.log("🕒 AI decided to log this event → generating title…");
-        // generate title
-        const titleRes = await fetch(`${API}/timeline/title`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(accessToken && { Authorization: `Bearer ${accessToken}` })
-          },
-          body: JSON.stringify({
-            transcript: fullTranscript,
-            summary: summary    // the summary you got back from /extract
-          })
-        });
-        const { title } = await titleRes.json();
-        console.log("✏️ Title from AI:", title);
-
-        // insert into timeline
-        const insertRes = await fetch(`${API}/timeline`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(accessToken && { Authorization: `Bearer ${accessToken}` })
-          },
-          body: JSON.stringify({
-            title,                      // the AI-generated title
-            description: summary,       // use the summary as the card text
-            transcript: fullTranscript  // store the raw transcript too
-          })
-        });
-        const insertJson = await insertRes.json();
-        if (insertRes.ok && insertJson.success) {
-          console.log("✅ Timeline event created via AI trigger:", insertJson.id);
-          setVoiceTimelineMsg(`✅ Event added: "${title}"\n🤖 Reason: ${reason}`);
-          await fetchTimeline();
-        } else {
-          console.error("❌ Insert failed:", insertJson);
-          setVoiceTimelineMsg(`❌ Insert failed: ${insertJson.error}`);
-        }
-      } else {
-        console.log("ℹ️ AI decided NOT to log. Reason:", reason);
-        setVoiceTimelineMsg(`ℹ️ AI did not log this event.\n🤖 Reason: ${reason}`);
-      }
-
-      // 3) Always generate story
-      handleSubmit(symptom, dismissal);
+      console.log("🎤 Browser transcript:", transcript);
+      await processVoiceTranscript(transcript);
       setListening(false);
     };
 
     rec.onerror = () => setListening(false);
     rec.start();
+  };
+
+  // 🎤 Stop recording function
+  const stopVoiceInput = async () => {
+    if (audioServiceRef.current && listening) {
+      await audioServiceRef.current.stopRecording();
+    }
   };
 
 
@@ -370,7 +306,10 @@ ALWAYS return a single-line raw JSON object with no extra formatting.`
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user);
     });
-    const socket = io('https://sasi-toolkit.onrender.com');
+    const socket = io(API, {
+      transports: ['polling', 'websocket'],
+      forceNew: true
+    });
     socket.on('transcription_result', data => {
       setSymptom(data.symptom);
       setDismissal(data.dismissal);
@@ -399,6 +338,140 @@ ALWAYS return a single-line raw JSON object with no extra formatting.`
 useEffect(() => {
   if (user) fetchTimeline();
 }, [user, fetchTimeline, handleSubmit]);
+
+// 🎤 AudioService initialization and cleanup
+useEffect(() => {
+  if (!user) return;
+  
+  console.log('🎤 Initializing AudioService...');
+  audioServiceRef.current = new AudioService();
+  
+  // Set up callbacks
+  audioServiceRef.current.onTranscript((transcript, device, duration) => {
+    console.log(`📝 Transcript from ${device}:`, transcript);
+    processVoiceTranscript(transcript);
+  });
+  
+  audioServiceRef.current.onConnectionStatus((status) => {
+    console.log('🔌 Connection status update:', status);
+    setEsp32Connected(status.esp32Connected);
+    setPrimaryDevice(status.primaryDevice);
+  });
+  
+  audioServiceRef.current.onRecordingStatus((isRecording, device) => {
+    console.log(`🎤 Recording status: ${isRecording ? 'Started' : 'Stopped'} on ${device}`);
+    setListening(isRecording);
+  });
+  
+  return () => {
+    console.log('🧹 Cleaning up AudioService...');
+    if (audioServiceRef.current) {
+      audioServiceRef.current.cleanup();
+    }
+  };
+}, [user]);
+
+// 🎤 Process voice transcript
+const processVoiceTranscript = async (transcript) => {
+  console.log("🎤 Processing transcript:", transcript);
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    const extractRes = await fetch(`${API}/extract`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` })
+      },
+      body: JSON.stringify({ transcript })
+    });
+    
+    if (!extractRes.ok) {
+      console.error('Extract failed', await extractRes.text());
+      return;
+    }
+    
+    const { symptom, dismissal, action, summary } = await extractRes.json();
+    setSymptom(symptom); 
+    setDismissal(dismissal); 
+    setAction(action); 
+    setSummary(summary);
+
+    // Classify for timeline
+    const classifyRes = await fetch(`${API}/classify-timeline`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type':'application/json', 
+        ...(token && {Authorization:`Bearer ${token}`}) 
+      },
+      body: JSON.stringify({
+        transcript,
+        summary,
+        systemPrompt: `You are a patient timeline-logging assistant.
+
+Your ONLY job is to return:
+  { "addToTimeline": true }
+
+—but ONLY if the user says something like:
+  "add this to my timeline", "please save this", "log this", "remember this", etc.
+
+If the user just describes a medical event, but does NOT ask to log it, return:
+  { "addToTimeline": false }
+
+NEVER guess or assume. NEVER infer. Only respond TRUE when the user **asks to log** the event.
+ALWAYS return a single-line raw JSON object with no extra formatting.`
+      })
+    });
+
+    const { addToTimeline, reason } = await classifyRes.json();
+    console.log("🤖 AI addToTimeline:", addToTimeline, "| Reason:", reason);
+
+    if (addToTimeline) {
+      const titleRes = await fetch(`${API}/timeline/title`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({ transcript, summary })
+      });
+      const { title } = await titleRes.json();
+
+      const insertRes = await fetch(`${API}/timeline`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({
+          title,
+          description: summary,
+          transcript: transcript
+        })
+      });
+      
+      const insertJson = await insertRes.json();
+      if (insertRes.ok && insertJson.success) {
+        console.log("✅ Timeline event created:", insertJson.id);
+        setVoiceTimelineMsg(`✅ Event added: "${title}"\n🤖 Reason: ${reason}`);
+        await fetchTimeline();
+      } else {
+        setVoiceTimelineMsg(`❌ Insert failed: ${insertJson.error}`);
+      }
+    } else {
+      setVoiceTimelineMsg(`ℹ️ AI did not log this event.\n🤖 Reason: ${reason}`);
+    }
+
+    // Always generate story
+    handleSubmit(symptom, dismissal);
+    
+  } catch (error) {
+    console.error('❌ Error processing voice transcript:', error);
+    setVoiceTimelineMsg(`❌ Error: ${error.message}`);
+  }
+};
 
 
 
@@ -445,6 +518,61 @@ useEffect(() => {
         <button className={tab === 'timeline' ? 'active' : ''} onClick={() => setTab('timeline')}>📅 Timeline</button>
       </div>
 
+      {/* 🎤 Microphone Status Indicator */}
+      <div className="microphone-status" style={{
+        padding: '10px',
+        margin: '10px 0',
+        backgroundColor: esp32Connected ? '#e8f5e8' : '#fff3cd',
+        border: `2px solid ${esp32Connected ? '#28a745' : '#ffc107'}`,
+        borderRadius: '8px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '20px' }}>
+            {esp32Connected ? '🎤' : '💻'}
+          </span>
+          <div>
+            <strong>
+              {esp32Connected ? 'ESP32 Microphone Connected' : 'Using Laptop Microphone'}
+            </strong>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {esp32Connected 
+                ? 'High-quality audio with OpenAI Whisper' 
+                : 'Browser speech recognition (fallback)'}
+            </div>
+          </div>
+        </div>
+        {listening && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="recording-indicator" style={{
+              width: '10px',
+              height: '10px',
+              backgroundColor: '#dc3545',
+              borderRadius: '50%',
+              animation: 'blink 1s infinite'
+            }}></span>
+            <span style={{ color: '#dc3545', fontWeight: 'bold' }}>
+              Recording on {primaryDevice}...
+            </span>
+            <button 
+              onClick={stopVoiceInput}
+              style={{
+                padding: '5px 10px',
+                backgroundColor: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Stop
+            </button>
+          </div>
+        )}
+      </div>
+
       {tab === 'story' && (
         <div className="panel">
           <label>Main Symptom:</label>
@@ -466,6 +594,38 @@ useEffect(() => {
           </div>
 
           <button className="generate" onClick={() => handleSubmit()}>🌸 Generate Story</button>
+
+          {/* 🎤 Enhanced Voice Input Button */}
+          <div style={{ margin: '20px 0', textAlign: 'center' }}>
+            <button 
+              className="voice-input-button"
+              onClick={listening ? stopVoiceInput : handleFullVoiceInput}
+              disabled={isLoading}
+              style={{
+                padding: '15px 30px',
+                fontSize: '18px',
+                backgroundColor: listening ? '#dc3545' : (esp32Connected ? '#28a745' : '#007bff'),
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                margin: '0 auto'
+              }}
+            >
+              {listening ? '⏹️' : '🎤'}
+              {listening 
+                ? `Stop Recording (${primaryDevice})` 
+                : `Start Voice Input ${esp32Connected ? '(ESP32)' : '(Laptop)'}`}
+            </button>
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+              {esp32Connected 
+                ? 'Press ESP32 button or click above. Uses OpenAI Whisper for accurate transcription.'
+                : 'Uses browser speech recognition. For better accuracy, connect ESP32 microphone.'}
+            </div>
+          </div>
 
           {listening && <div className="listening-indicator">🎙️ Listening...</div>}
 

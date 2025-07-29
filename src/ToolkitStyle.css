@@ -276,3 +276,27 @@ body {
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
   word-break: break-word;
 }
+
+/* 🎤 Recording indicator animation */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.recording-indicator {
+  animation: blink 1s infinite;
+}
+
+/* 🎤 Voice input button styles */
+.voice-input-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.voice-input-button:active {
+  transform: translateY(0);
+}
+
+.microphone-status {
+  transition: all 0.3s ease;
+}

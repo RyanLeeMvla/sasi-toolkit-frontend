@@ -21,16 +21,32 @@ const upload = multer({ dest: 'uploads/' });
 const WebSocket = require('ws');
 const path = require('path');
 
+// 🎤 Whisper WebSocket Server for ESP32 and Laptop Mic Integration
+const whisperWss = new WebSocket.Server({ port: 8080 });
+console.log('🎤 Whisper WebSocket server started on port 8080');
+
+// Audio streaming state
+const audioStreamState = {
+  isRecording: false,
+  audioChunks: [],
+  startTime: null,
+  connectedDevices: new Set(),
+  esp32Connected: false
+};
+
 // ✅ Enable CORS and JSON parsing
 app.use(cors());
 app.use(express.json());
 
-// ✅ Socket.IO setup
+// ✅ Socket.IO setup with better WebSocket handling
 const io = new Server(httpServer, {
   cors: {
     origin: '*', // Replace with your Vercel URL for security
     methods: ['GET', 'POST']
-  }
+  },
+  transports: ['polling', 'websocket'],
+  allowEIO3: true,
+  path: '/socket.io/' // Explicitly set the Socket.IO path
 });
 
 io.on('connection', (socket) => {
@@ -44,6 +60,168 @@ io.on('connection', (socket) => {
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+// 🎤 Whisper WebSocket Handler for ESP32 + Laptop Integration
+whisperWss.on('connection', (ws, req) => {
+  console.log('🎤 New Whisper client connected from:', req.socket.remoteAddress);
+  
+  let isESP32 = false;
+  let deviceType = 'laptop';
+  
+  ws.on('message', async (data) => {
+    try {
+      // Handle JSON messages (control messages)
+      if (data.toString().startsWith('{')) {
+        const message = JSON.parse(data.toString());
+        console.log('📥 Received message:', message);
+        
+        switch (message.action) {
+          case 'ping':
+            console.log('🏓 Ping from ESP32:', message.message);
+            isESP32 = true;
+            deviceType = 'ESP32';
+            audioStreamState.esp32Connected = true;
+            audioStreamState.connectedDevices.add('ESP32');
+            io.emit('esp32Connected', { connected: true });
+            ws.send('{"action":"pong","message":"Server received ping"}');
+            break;
+            
+          case 'start_recording':
+            console.log('🎤 Starting audio recording from:', deviceType);
+            audioStreamState.isRecording = true;
+            audioStreamState.audioChunks = [];
+            audioStreamState.startTime = Date.now();
+            io.emit('recordingStarted', { device: deviceType });
+            break;
+            
+          case 'stop_recording':
+            console.log('⏹️ Stopping audio recording from:', deviceType);
+            await stopAudioStreamAndTranscribe(ws, deviceType);
+            break;
+            
+          case 'laptop_audio_chunk':
+            if (message.audioData) {
+              const audioBuffer = Buffer.from(message.audioData);
+              audioStreamState.audioChunks.push(audioBuffer);
+              console.log(`📦 Received laptop audio chunk: ${audioBuffer.length} bytes`);
+            }
+            break;
+        }
+      } else {
+        // Handle binary audio data from ESP32
+        if (audioStreamState.isRecording && isESP32) {
+          audioStreamState.audioChunks.push(data);
+          console.log(`📦 ESP32 audio chunk: ${data.length} bytes (Total: ${audioStreamState.audioChunks.length})`);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error processing WebSocket message:', error);
+    }
+  });
+  
+  ws.on('close', () => {
+    console.log(`❌ Whisper client disconnected: ${deviceType}`);
+    if (isESP32) {
+      audioStreamState.esp32Connected = false;
+      audioStreamState.connectedDevices.delete('ESP32');
+      io.emit('esp32Connected', { connected: false });
+    }
+  });
+  
+  ws.on('error', (error) => {
+    console.error('❌ WebSocket error:', error);
+  });
+});
+
+// 🎤 Audio Processing Functions
+async function stopAudioStreamAndTranscribe(ws, deviceType) {
+  audioStreamState.isRecording = false;
+  
+  if (audioStreamState.audioChunks.length === 0) {
+    console.log('⚠️ No audio chunks received');
+    ws.send('{"action":"transcript","text":"No audio received","device":"' + deviceType + '"}');
+    return;
+  }
+  
+  try {
+    const duration = (Date.now() - audioStreamState.startTime) / 1000;
+    console.log(`🎵 Processing ${audioStreamState.audioChunks.length} chunks (${duration.toFixed(1)}s) from ${deviceType}`);
+    
+    const totalSize = audioStreamState.audioChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const combinedAudio = Buffer.concat(audioStreamState.audioChunks, totalSize);
+    
+    const wavFile = await saveAudioAsWAV(combinedAudio, deviceType);
+    
+    console.log('🤖 Sending to OpenAI Whisper...');
+    const transcription = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(wavFile),
+      model: 'whisper-1',
+      language: 'en'
+    });
+    
+    const transcript = transcription.text.trim();
+    console.log('📝 Transcription result:', transcript);
+    
+    ws.send(JSON.stringify({
+      action: 'transcript',
+      text: transcript,
+      device: deviceType,
+      duration: duration,
+      chunks: audioStreamState.audioChunks.length
+    }));
+    
+    io.emit('transcriptReceived', {
+      text: transcript,
+      device: deviceType,
+      duration: duration
+    });
+    
+    fs.unlinkSync(wavFile);
+    audioStreamState.audioChunks = [];
+    
+  } catch (error) {
+    console.error('❌ Transcription error:', error);
+    ws.send('{"action":"error","message":"Transcription failed: ' + error.message + '"}');
+  }
+}
+
+async function saveAudioAsWAV(audioBuffer, deviceType) {
+  const filename = `audio_${deviceType}_${Date.now()}.wav`;
+  const filepath = path.join(__dirname, 'uploads', filename);
+  
+  if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
+    fs.mkdirSync(path.join(__dirname, 'uploads'));
+  }
+  
+  // WAV header for 16kHz, 16-bit, mono PCM
+  const sampleRate = 16000;
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+  const blockAlign = numChannels * bitsPerSample / 8;
+  const dataSize = audioBuffer.length;
+  
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(dataSize, 40);
+  
+  const wavBuffer = Buffer.concat([header, audioBuffer]);
+  fs.writeFileSync(filepath, wavBuffer);
+  
+  console.log(`💾 Saved WAV file: ${filename} (${Math.round(wavBuffer.length / 1024)}KB)`);
+  return filepath;
+}
 
 // JWT middleware (Express backend)
 const jwt = require('jsonwebtoken');
@@ -65,6 +243,17 @@ app.post('/trigger-button', (req, res) => {
   io.emit('buttonPress');
   console.log('🟢 Button press emitted to clients');
   res.json({ status: 'Button press emitted' });
+});
+
+// 🎤 Route: Get microphone status and available devices
+app.get('/microphone-status', (req, res) => {
+  res.json({
+    esp32Connected: audioStreamState.esp32Connected,
+    availableDevices: Array.from(audioStreamState.connectedDevices),
+    primaryDevice: audioStreamState.esp32Connected ? 'ESP32' : 'laptop',
+    isRecording: audioStreamState.isRecording,
+    whisperServerRunning: true
+  });
 });
 
 
@@ -442,8 +631,10 @@ function makeWavHeader(pcmLength) {
 }
 
 // WebSocket server for /record (raw PCM streaming, JWT-aware)
-const wsServer = new WebSocket.Server({ server: httpServer, path: '/record' });
+// COMMENTED OUT: This was conflicting with Socket.IO WebSocket upgrades
+// const wsServer = new WebSocket.Server({ server: httpServer, path: '/record' });
 
+/* 
 wsServer.on('connection', socket => {
   let chunks = [];
   let userJWT = null;
@@ -485,6 +676,7 @@ wsServer.on('connection', socket => {
     }
   });
 });
+*/
 
 // ✅ Start HTTP + WebSocket server
 httpServer.listen(PORT, () => {
