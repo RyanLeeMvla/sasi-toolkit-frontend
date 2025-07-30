@@ -1,52 +1,382 @@
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <HTTPClient.h>
+#include <ArduinoWebsockets.h>
+#include <ArduinoJson.h>
 
-const char* ssid     = "Sasi";
+// WiFi Configuration
+const char* ssid = "Sasi";
 const char* password = "toolkitt";
-const char* triggerURL = "https://sasi-toolkit.onrender.com/trigger-button";
+const char* websocketURL = "10.235.124.11";  // Your computer's IP address
+const int websocketPort = 8080;
+
+// Backend API Configuration (for triggering app actions)
+const char* backendURL = "http://10.235.124.11:10000";  // Your backend server
 
 WiFiMulti wifiMulti;
-const int buttonPin = 4
+using namespace websockets;
+WebsocketsClient client;
+
+// Hardware Configuration
+const int buttonPin = 4;
+const int ledPin = 2;  // Built-in LED for status
+const int micPin = 1;  // MAX9814 OUT connected to GPIO1
+
+// Audio Configuration
+const int sampleRate = 16000;
+const int bufferSize = 512;
+int16_t audioBuffer[bufferSize];
+bool isRecording = false;
+bool isConnected = false;
+int bufferIndex = 0;
+
+// State Management
 bool lastButtonState = HIGH;
+unsigned long lastPingTime = 0;
+const unsigned long pingInterval = 30000; // Ping every 30 seconds
+unsigned long lastReconnectAttempt = 0;
+const unsigned long reconnectInterval = 5000; // Try reconnect every 5 seconds
 
 void setup() {
   Serial.begin(115200);
+  delay(2000);
+  
+  Serial.println("🎤 ESP32 Storytelling Toolkit Microphone Client");
+  Serial.println("============================================");
+  
+  // Initialize hardware
   pinMode(buttonPin, INPUT_PULLUP);
-
-  WiFi.mode(WIFI_STA);
-  wifiMulti.addAP(ssid, password);
-
-  Serial.print("🔌 Connecting to Wi-Fi");
-  // wifiMulti.run() returns WL_CONNECTED when joined
-  while (wifiMulti.run() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(500);
-  }
-  Serial.println(" ✅ Connected!");
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
+  
+  // Configure ADC for MAX9814 microphone
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+  
+  // Connect to WiFi with timeout
+  connectToWiFi();
+  
+  // Setup WebSocket connection
+  setupWebSocket();
 }
 
 void loop() {
-  bool currentButtonState = digitalRead(buttonPin);
-  if (lastButtonState == HIGH && currentButtonState == LOW) {
-    Serial.println("🟢 Button pressed. Sending POST request...");
-    sendTriggerRequest();
+  // Feed watchdog
+  yield();
+  
+  // Maintain WebSocket connection
+  if (isConnected) {
+    client.poll();
+  } else {
+    attemptReconnection();
   }
-  lastButtonState = currentButtonState;
-  delay(50);
+  
+  // Handle button press
+  handleButtonPress();
+  
+  // Send periodic ping to maintain connection and identify as ESP32
+  sendPeriodicPing();
+  
+  // Handle audio recording
+  if (isRecording && isConnected) {
+    sampleAndStreamAudio();
+  }
+  
+  // Non-blocking delay
+  delay(10);
 }
 
-void sendTriggerRequest() {
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    http.begin(triggerURL);
-    http.addHeader("Content-Type", "application/json");
-    int code = http.POST("{}");
-    if (code > 0) Serial.printf("✅ Response: %d\n", code);
-    else        Serial.printf("❌ POST failed: %s\n", http.errorToString(code).c_str());
-    http.end();
-  } else {
-    Serial.println("❌ Lost Wi-Fi. Retrying...");
-    // let WiFiMulti re-attempt in the next loop
+void connectToWiFi() {
+  WiFi.mode(WIFI_STA);
+  wifiMulti.addAP(ssid, password);
+  
+  Serial.print("🔌 Connecting to Wi-Fi");
+  unsigned long wifiStartTime = millis();
+  
+  // Non-blocking WiFi connection with timeout
+  while (wifiMulti.run() != WL_CONNECTED && (millis() - wifiStartTime) < 20000) {
+    Serial.print(".");
+    digitalWrite(ledPin, !digitalRead(ledPin)); // Blink LED
+    delay(500);
+    yield(); // Feed watchdog
   }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println(" ✅ Connected!");
+    Serial.printf("📍 IP Address: %s\n", WiFi.localIP().toString().c_str());
+    digitalWrite(ledPin, HIGH);
+  } else {
+    Serial.println(" ❌ Failed to connect to WiFi!");
+    digitalWrite(ledPin, LOW);
+  }
+}
+
+void setupWebSocket() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("❌ No WiFi connection for WebSocket");
+    return;
+  }
+  
+  // Set up WebSocket event handlers
+  client.onMessage([&](WebsocketsMessage message) {
+    handleWebSocketMessage(message);
+  });
+
+  client.onEvent([&](WebsocketsEvent event, String data) {
+    handleWebSocketEvent(event, data);
+  });
+
+  // Attempt connection
+  Serial.printf("🔌 Connecting to WebSocket: %s:%d\n", websocketURL, websocketPort);
+  bool connected = client.connect(websocketURL, websocketPort, "/");
+  
+  if (connected) {
+    Serial.println("✅ WebSocket connected successfully");
+    isConnected = true;
+    digitalWrite(ledPin, HIGH);
+    
+    // Send initial ping to identify as ESP32
+    sendDeviceIdentification();
+  } else {
+    Serial.println("❌ WebSocket connection failed");
+    isConnected = false;
+    digitalWrite(ledPin, LOW);
+  }
+}
+
+void handleWebSocketMessage(WebsocketsMessage message) {
+  Serial.printf("📥 Received: %s\n", message.data().c_str());
+  
+  // Parse JSON response
+  DynamicJsonDocument doc(1024);
+  DeserializationError error = deserializeJson(doc, message.data());
+  
+  if (error) {
+    Serial.printf("❌ JSON parse error: %s\n", error.c_str());
+    return;
+  }
+  
+  String action = doc["action"];
+  
+  if (action == "transcript") {
+    String transcript = doc["text"];
+    String device = doc["device"];
+    float duration = doc["duration"];
+    
+    Serial.println("✅ Transcription received!");
+    Serial.printf("   📝 Text: %s\n", transcript.c_str());
+    Serial.printf("   🎤 Device: %s\n", device.c_str());
+    Serial.printf("   ⏱️ Duration: %.1fs\n", duration);
+    
+    // Stop recording
+    stopRecording();
+    
+    // Send transcript to backend for processing
+    sendTranscriptToBackend(transcript);
+    
+  } else if (action == "pong") {
+    Serial.println("🏓 Received pong from server");
+  } else if (action == "error") {
+    String errorMsg = doc["message"];
+    Serial.printf("❌ Server error: %s\n", errorMsg.c_str());
+    stopRecording();
+  }
+}
+
+void handleWebSocketEvent(WebsocketsEvent event, String data) {
+  switch (event) {
+    case WebsocketsEvent::ConnectionOpened:
+      Serial.println("🔗 WebSocket connection opened");
+      isConnected = true;
+      digitalWrite(ledPin, HIGH);
+      sendDeviceIdentification();
+      break;
+      
+    case WebsocketsEvent::ConnectionClosed:
+      Serial.println("❌ WebSocket connection closed");
+      isConnected = false;
+      digitalWrite(ledPin, LOW);
+      if (isRecording) stopRecording();
+      break;
+      
+    case WebsocketsEvent::GotPing:
+      Serial.println("🏓 Received ping from server");
+      break;
+      
+    default:
+      break;
+  }
+}
+
+void handleButtonPress() {
+  bool currentButtonState = digitalRead(buttonPin);
+  
+  if (lastButtonState == HIGH && currentButtonState == LOW && isConnected) {
+    Serial.println("🟢 Button pressed!");
+    
+    if (!isRecording) {
+      startRecording();
+    } else {
+      stopRecording();
+    }
+    
+    delay(200); // Debounce
+  }
+  
+  lastButtonState = currentButtonState;
+}
+
+void startRecording() {
+  if (!isConnected) {
+    Serial.println("❌ Cannot start recording - not connected");
+    return;
+  }
+  
+  Serial.println("🎤 Starting audio recording...");
+  isRecording = true;
+  bufferIndex = 0;
+  
+  // Send start recording message
+  DynamicJsonDocument doc(256);
+  doc["action"] = "start_recording";
+  doc["device"] = "ESP32";
+  doc["sample_rate"] = sampleRate;
+  doc["format"] = "pcm16";
+  doc["message"] = "ESP32 MAX9814 microphone recording started";
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  client.send(jsonString);
+  
+  Serial.println("📤 Sent start recording message");
+  
+  // Blink LED to indicate recording start
+  for (int i = 0; i < 6; i++) {
+    digitalWrite(ledPin, !digitalRead(ledPin));
+    delay(100);
+  }
+  digitalWrite(ledPin, LOW); // LED off during recording
+}
+
+void stopRecording() {
+  if (!isRecording) return;
+  
+  Serial.println("⏹️ Stopping audio recording...");
+  isRecording = false;
+  digitalWrite(ledPin, isConnected ? HIGH : LOW);
+  
+  // Send stop recording message
+  DynamicJsonDocument doc(256);
+  doc["action"] = "stop_recording";
+  doc["device"] = "ESP32";
+  doc["message"] = "ESP32 recording completed";
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  client.send(jsonString);
+  
+  Serial.println("📤 Sent stop recording message");
+}
+
+void sampleAndStreamAudio() {
+  // Sample audio into buffer
+  while (bufferIndex < bufferSize && isRecording) {
+    int rawValue = analogRead(micPin);
+    int16_t sample = (rawValue - 2048) * 8; // Convert to signed 16-bit
+    
+    audioBuffer[bufferIndex] = sample;
+    bufferIndex++;
+    
+    // Control sampling rate (approximately 16kHz)
+    delayMicroseconds(25); // Fine-tuned timing for optimal sampling
+    
+    // Feed watchdog during long operations
+    if (bufferIndex % 100 == 0) {
+      yield();
+    }
+  }
+  
+  // Send buffer when full
+  if (bufferIndex >= bufferSize) {
+    bool sent = client.sendBinary((const char*)audioBuffer, bufferSize * sizeof(int16_t));
+    bufferIndex = 0;
+    
+    // Debug output
+    static int chunkCount = 0;
+    chunkCount++;
+    if (chunkCount % 10 == 0) { // Every 10th chunk
+      Serial.printf("📤 Sent audio chunk %d (%d bytes) - Status: %s\n", 
+                   chunkCount, bufferSize * sizeof(int16_t), sent ? "OK" : "FAILED");
+    }
+  }
+}
+
+void sendDeviceIdentification() {
+  if (!isConnected) return;
+  
+  DynamicJsonDocument doc(512);
+  doc["action"] = "ping";
+  doc["device"] = "ESP32-S3";
+  doc["microphone"] = "MAX9814";
+  doc["message"] = "ESP32 Storytelling Toolkit Client";
+  doc["version"] = "1.0";
+  doc["capabilities"] = "audio_recording,button_trigger,led_status";
+  doc["sample_rate"] = sampleRate;
+  doc["timestamp"] = millis();
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  client.send(jsonString);
+  
+  Serial.println("🏓 Sent device identification");
+}
+
+void sendPeriodicPing() {
+  if (millis() - lastPingTime > pingInterval && isConnected) {
+    sendDeviceIdentification();
+    lastPingTime = millis();
+  }
+}
+
+void attemptReconnection() {
+  if (millis() - lastReconnectAttempt > reconnectInterval) {
+    Serial.println("🔄 Attempting to reconnect...");
+    setupWebSocket();
+    lastReconnectAttempt = millis();
+  }
+}
+
+void sendTranscriptToBackend(String transcript) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("❌ No WiFi for backend request");
+    return;
+  }
+  
+  Serial.println("📤 Sending transcript to backend for processing...");
+  
+  HTTPClient http;
+  String url = String(backendURL) + "/trigger-button";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  
+  // Create JSON payload with transcript
+  DynamicJsonDocument doc(512);
+  doc["source"] = "ESP32";
+  doc["transcript"] = transcript;
+  doc["device"] = "ESP32-MAX9814";
+  doc["timestamp"] = millis();
+  
+  String payload;
+  serializeJson(doc, payload);
+  
+  int httpResponseCode = http.POST(payload);
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.printf("✅ Backend response (%d): %s\n", httpResponseCode, response.c_str());
+  } else {
+    Serial.printf("❌ Backend request failed: %s\n", http.errorToString(httpResponseCode).c_str());
+  }
+  
+  http.end();
 }

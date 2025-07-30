@@ -21,16 +21,8 @@ class AudioService {
   // Connect to the integrated Whisper WebSocket server
   connectToWhisperServer() {
     try {
-      // Connect to the WebSocket server
-      let wsUrl;
-      if (process.env.NODE_ENV === 'development') {
-        wsUrl = 'ws://localhost:8080';
-      } else {
-        // For production, use the same host but with WebSocket protocol
-        const host = window.location.hostname;
-        const port = window.location.port || '443';
-        wsUrl = `wss://${host}:8080`; // Note: you might need to adjust this for your production setup
-      }
+      // Always connect to local Whisper server during development
+      const wsUrl = 'ws://localhost:8080';
       
       console.log('🔌 Connecting to Whisper WebSocket:', wsUrl);
       this.ws = new WebSocket(wsUrl);

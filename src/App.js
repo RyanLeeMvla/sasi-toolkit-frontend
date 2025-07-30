@@ -5,6 +5,8 @@ import ProgressBar from './ProgressBar';
 import io from 'socket.io-client';
 import supabase from './supabaseClient';
 import Login from './Login';
+import PasswordReset from './PasswordReset';
+import ChangePassword from './ChangePassword';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import AudioService from './AudioService';
@@ -49,6 +51,9 @@ function App() {
   const audioServiceRef = useRef(null);
   const [esp32Connected, setEsp32Connected] = useState(false);
   const [primaryDevice, setPrimaryDevice] = useState('laptop');
+  
+  // 🔐 Password Management State
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   // PDF Exporter for Timeline (after timeline state is declared)
   const exportTimelineAsPDF = () => {
@@ -477,6 +482,11 @@ ALWAYS return a single-line raw JSON object with no extra formatting.`
 
   if (!user) return <Login setUser={setUser} />;
 
+  // 🔐 Check if we're on the password reset route
+  if (window.location.pathname === '/reset-password') {
+    return <PasswordReset />;
+  }
+
   // 🎤 Single-field mic input
   const startListening = (fieldSetter) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -756,15 +766,31 @@ ALWAYS return a single-line raw JSON object with no extra formatting.`
         </div>
       )}
 
-      <button
-        className="signout-button"
-        onClick={async () => {
-          await supabase.auth.signOut();
-          setUser(null);
-        }}
-      >
-        🔒 Sign Out
-      </button>
+      <div className="user-controls">
+        <button
+          className="change-password-button"
+          onClick={() => setShowChangePassword(true)}
+        >
+          🔑 Change Password
+        </button>
+        
+        <button
+          className="signout-button"
+          onClick={async () => {
+            await supabase.auth.signOut();
+            setUser(null);
+          }}
+        >
+          🔒 Sign Out
+        </button>
+      </div>
+
+      {/* 🔐 Change Password Modal */}
+      {showChangePassword && (
+        <ChangePassword 
+          onClose={() => setShowChangePassword(false)} 
+        />
+      )}
     </div>
   );
 }
